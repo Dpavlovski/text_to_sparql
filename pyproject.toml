@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "text-to-sparql"
+version = "0.1.0"
+description = ""
+authors = ["Dimitar Pavlovski dimitar.pavlovski12@gmail.com"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.13"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
