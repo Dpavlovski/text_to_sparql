@@ -3,53 +3,56 @@ import json
 from text_to_sparql.llm.chat import chat_with_ollama
 
 
-def extract_entities_and_relations(question):
-    ner_prompt = f"""
-        You are an AI that extracts entities and relations from a given question. 
-        Your task is to analyze the question and identify:
-        - **Entities**: Specific people, places, items, concepts, or other relevant subjects mentioned in the question.
-        - **Relations**: Actions, associations, or connections described in the question.
+def extract_and_refine_wikidata_keywords(question):
+    combined_prompt = f"""
+        You are an AI specializing in extracting and refining entities and relations from questions to align with Wikidata concepts. 
+        Your task is to:
 
-        Your response must strictly adhere to the following JSON format:
+        1. Extract entities and relations from the question.
+        2. Refine these entities and relations to their most likely Wikidata-compatible names.
+
+        **Instructions:**
+        - Entities: Specific people, places, items, concepts, or other relevant subjects in the question.
+        - Relations: Actions, associations, or connections described in the question.
+        - Refine all extracted entities and relations to concise keywords matching Wikidata's naming conventions, maintaining their original meanings.
+
+        **Response Format (strict JSON format):**
         {{
-            "entities": ["entity1", "entity2", ...],
-            "relations": ["relation1", "relation2", ...]
+            "entities": ["refined_entity1", "refined_entity2", ...],
+            "relations": ["refined_relation1", "refined_relation2", ...]
         }}
-
-        Make sure to:
-        - Only include valid entities and relations extracted from the question.
-        - Avoid adding explanations, comments, or additional text outside the JSON structure.
 
         **Examples:**
 
         1. **Input Question**: "Who is the president of the United States?"
            **Output**:
            {{
-               "entities": ["president", "United States"],
+               "entities": ["President of the United States"],
                "relations": ["is"]
            }}
 
         2. **Input Question**: "Where was Edison born?"
            **Output**:
            {{
-               "entities": ["Edison"],
-               "relations": ["was born"]
+               "entities": ["Thomas Edison"],
+               "relations": ["born"]
            }}
 
         3. **Input Question**: "What are the capitals of European countries?"
            **Output**:
            {{
-               "entities": ["capitals", "European countries"],
+               "entities": ["capital", "European countries"],
                "relations": ["are"]
            }}
 
-        Now, analyze the following question and return the extracted entities and relations in the required JSON format:
+        Now, analyze and refine the following question to return the entities and relations in the required format:
 
         Question: {question}
-        """
-    response = chat_with_ollama(ner_prompt, system_message="You are an NER assistant.")
+    """
+    response = chat_with_ollama(combined_prompt,
+                                system_message="You are a Wikidata entity and relation extraction assistant.")
     try:
         return json.loads(response)
     except json.JSONDecodeError:
-        print("Error decoding the NER response. Ensure the response is in valid JSON format.")
+        print("Error decoding the response. Ensure the response is in valid JSON format.")
         return {"entities": [], "relations": []}
