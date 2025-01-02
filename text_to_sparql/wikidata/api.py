@@ -43,19 +43,13 @@ def execute_sparql_query(query):
     sparql.setReturnFormat(JSON)
 
     try:
-        results = sparql.query().convert()
+        responses = sparql.query().convert()
+        if responses["results"]["bindings"]:
+            for result in responses["results"]["bindings"]:
+                print(result["answer"]["value"])
 
-        for result in results["results"]["bindings"]:
-            predicate1 = result.get("predicate1", {}).get("value", "N/A")
-            neighbor1 = result.get("neighbor1", {}).get("value", "N/A")
-            neighbor1_label = result.get("neighbor1Label", {}).get("value", "N/A")
-            predicate2 = result.get("predicate2", {}).get("value", "N/A")
-            neighbor2 = result.get("neighbor2", {}).get("value", "N/A")
-            neighbor2_label = result.get("neighbor2Label", {}).get("value", "N/A")
-
-            print(f"Predicate1: {predicate1}, Neighbor1: {neighbor1} ({neighbor1_label})")
-            print(f"Predicate2: {predicate2}, Neighbor2: {neighbor2} ({neighbor2_label})")
-            print("-" * 50)
+        else:
+            print("No results found.")
 
     except Exception as e:
         print(f"An error occurred: {e}")
