@@ -1,10 +1,11 @@
 import json
+from typing import Any
 
 import requests
 from SPARQLWrapper import SPARQLWrapper, JSON
 
 
-def fetch_wikidata(params):
+def fetch_wikidata(params) -> str | Any:
     url = 'https://www.wikidata.org/w/api.php'
     try:
         response = requests.get(url, params=params)
@@ -31,7 +32,7 @@ def search_wikidata(keywords, keyword_type):
         }
         wikidata_result = fetch_wikidata(params)
         print(f"Wikidata Results for {keyword_type} '{keyword}':", wikidata_result)
-        if isinstance(wikidata_result, dict) and "search" in wikidata_result:
+        if isinstance(wikidata_result, dict):
             results.extend(wikidata_result["search"])
     return results
 
