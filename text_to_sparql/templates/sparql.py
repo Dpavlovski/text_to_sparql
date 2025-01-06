@@ -10,7 +10,7 @@ def sparql_template(question: str, examples: List[ScoredPoint], entity_descripti
     entity_descriptions = f"Entities:\n{entity_descriptions}" if entity_descriptions else ""
     relations_descriptions = f"Relations:\n{relations_descriptions}" if relations_descriptions else ""
 
-    return f"""You are an AI that generates precise SPARQL queries to answer the given question. 
+    return f"""You are an AI that generates precise SPARQL queries to answer the given question related to Wikidata knowledge graph. 
 Your task is to carefully select the most relevant entities and relations from the provided options in order to answer the question. Use only the provided entities and relations.
 You must only return the sparql query and nothing else.
 

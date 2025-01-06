@@ -45,12 +45,15 @@ def execute_sparql_query(query):
 
     try:
         responses = sparql.query().convert()
+        results = []
         if responses["results"]["bindings"]:
             for result in responses["results"]["bindings"]:
-                print(result["answer"]["value"])
-
+                results.append({
+                    var: value for var, value in result.items()
+                })
+            return results
         else:
-            print("No results found.")
+            return None
 
     except Exception as e:
         print(f"An error occurred: {e}")
