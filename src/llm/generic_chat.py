@@ -3,9 +3,9 @@ from enum import Enum
 
 from dotenv import load_dotenv
 
-from text_to_sparql.llm.chat_with_hf import chat_with_hf_inference
-from text_to_sparql.llm.chat_with_ollama import chat_with_ollama
-from text_to_sparql.llm.gpt_chat import chat_with_openai
+from src.llm.chat_with_hf import chat_with_hf_inference
+from src.llm.chat_with_ollama import chat_with_ollama
+from src.llm.gpt_chat import chat_with_openai
 
 
 class ChatModel(Enum):

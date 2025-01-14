@@ -3,8 +3,8 @@ from typing import Any, Dict
 
 from pydantic import BaseModel
 
-from text_to_sparql.llm.generic_chat import generic_chat
-from text_to_sparql.utils.trim_and_load_json import trim_and_load_json
+from src.llm.generic_chat import generic_chat
+from src.utils.trim_and_load_json import trim_and_load_json
 
 
 class ChatResponse(BaseModel):

@@ -2,13 +2,13 @@ from typing import List
 
 from qdrant_client.http.models import ScoredPoint
 
-from text_to_sparql.databases.qdrant.search_embeddings import extract_search_objects
-from text_to_sparql.templates.ner import ner_template
-from text_to_sparql.templates.sparql import sparql_template
-from text_to_sparql.templates.zero_shot_sparql import zero_shot_sparql
-from text_to_sparql.utils.format_results import format_results
-from text_to_sparql.utils.json__extraction import get_json_response
-from text_to_sparql.wikidata.api import search_wikidata, execute_sparql_query
+from src.databases.qdrant.search_embeddings import extract_search_objects
+from src.templates.ner import ner_template
+from src.templates.sparql import sparql_template
+from src.templates.zero_shot_sparql import zero_shot_sparql
+from src.utils.format_results import format_results
+from src.utils.json__extraction import get_json_response
+from src.wikidata.api import search_wikidata, execute_sparql_query
 
 
 def get_ner_results(question: str) -> dict:
@@ -28,6 +28,7 @@ def get_sparql(question: str, examples: List[ScoredPoint], entity_descriptions: 
 
 
 def perform_multi_querying_with_ranking(question, examples, entity_descriptions, relations_descriptions):
+    sparql_query = None
     for i in range(5):
         try:
             sparql_query = get_sparql(question, examples, entity_descriptions, relations_descriptions)
@@ -42,26 +43,26 @@ def perform_multi_querying_with_ranking(question, examples, entity_descriptions,
         except Exception as e:
             print(f"Error during query {i + 1}: {e}")
 
-    return None, None
+    return sparql_query, None
 
 
-def main():
-    question = ""
-
+def text_to_sparql(question):
+    answers = []
+    query = None
     initial_sparql = get_json_response(zero_shot_sparql(question), list_name="sparql",
                                        system_message="You are a SPARQL query generator.")["sparql"]
     print(initial_sparql)
-
     initial_result = execute_sparql_query(initial_sparql)
-
     if initial_result:
         print("Query:")
         print(initial_sparql)
         print("Result:")
         for row in initial_result:
-            for var, value in row.items(): \
+            for var, value in row.items():
                     print(f"{var}: {value['value']}")
+                    answers.append(f"{var}: {value['value']}")
             print()
+        return initial_sparql, answers
     else:
         examples = extract_search_objects(question, collection_name="lcquad2_0")
 
@@ -98,10 +99,11 @@ def main():
                     print(query)
                     print("Results:")
                     for row in result:
-                        for var, value in row.items(): \
+                        for var, value in row.items():
                                 print(f"{var}: {value['value']}")
+                                answers.append(f"{var}: {value['value']}")
                         print()
-                    break
+                    return query, answers
                 else:
                     print("No valid query returned a non-empty result.")
 
@@ -110,7 +112,13 @@ def main():
 
         else:
             print("All attempts failed. No valid SPARQL query returned results.")
+            return query, "No results found."
 
 
-if __name__ == "__main__":
-    main()
+def main():
+    question = "Who invented the telephone?"
+
+    text_to_sparql(question)
+#
+# if __name__ == "__main__":
+#     main()

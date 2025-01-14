@@ -7,7 +7,7 @@ from qdrant_client import QdrantClient, models
 from qdrant_client.conversions import common_types as types
 from qdrant_client.http.models import Record
 
-from text_to_sparql.llm.embed_content import embed_content
+from src.llm.embed_content import embed_content
 
 
 class SearchOutput(BaseModel):

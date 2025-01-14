@@ -1,4 +1,4 @@
-from text_to_sparql.databases.qdrant.qdrant import QdrantDatabase
+from src.databases.qdrant.qdrant import QdrantDatabase
 
 
 def extract_search_objects(question: str, collection_name: str):

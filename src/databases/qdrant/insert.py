@@ -3,8 +3,8 @@ import uuid
 
 from tqdm import tqdm
 
-from text_to_sparql.databases.qdrant.qdrant import QdrantDatabase
-from text_to_sparql.dataset.lcquad2_0 import get_dataset
+from src.databases.qdrant.qdrant import QdrantDatabase
+from src.dataset.lcquad2_0 import get_dataset
 
 
 def embedd_dataset():
@@ -34,3 +34,6 @@ def embedd_dataset():
             logging.error(f"Error processing record with question: {question}. Error: {e}")
 
     logging.info("Embedding process completed successfully.")
+
+
+embedd_dataset()

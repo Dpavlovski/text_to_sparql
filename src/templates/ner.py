@@ -5,7 +5,7 @@ Question:
             
 Important: The search must be relevant to the question. Make sure the items and properties exists in Wikidata. Dont extract anything outside the question.
 
-Return the extracted information as a list in valid JSON format. Do not include any other text or comments.
+Return the extracted information in valid JSON format. Do not include any other text or comments.
 Output:
 {{  
     "nodes": [

@@ -17,6 +17,7 @@ pydantic-ai = "^0.0.17"
 sparqlwrapper = "^2.0.0"
 datasets = "^3.2.0"
 qdrant-client = "^1.12.2"
+pymongo = "^4.10.1"
 
 
 [build-system]
