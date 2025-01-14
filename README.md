@@ -6,6 +6,7 @@ This project aims to build a system that translates natural language questions i
 
 - **QALD Data**cted results from the QALD JSON dataset.**set Parsing**: Extracts questions, SPARQL queries, and expe
 - **Entity and Relation Linking**: Identifies entities and relations in the question using Named Entity Recognition (NER) and links them to Wikidata items and properties.
+- **Enititis and Relations**: are searched on Wikidata endpoint for finding the most similar.
 - **SPARQL Query Generation**: Generates SPARQL queries based on extracted entities, relations, and question templates.
 - **Result Evaluation**: Compares generated results with ground truth results to assess the correctness of the query.
 - **Database Integration**: Saves and retrieves benchmark results to/from a MongoDB database.
@@ -13,23 +14,8 @@ This project aims to build a system that translates natural language questions i
 ## Requirements
 
 - **Python 3.8+**
-- **MongoDB**
-- Required Python packages (listed in `requirements.txt`)
-
-## Installation
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/your-repository/text-to-sparql.git
-   cd text-to-sparql
-   ```
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Set up MongoDB:
-   - Ensure MongoDB is installed and running.
-   - Update the MongoDB connection string in `src/databases/mongo/mongo.py` if necessary.
+- Poetry
+- Docker
 
 ## Usage
 
@@ -82,13 +68,6 @@ db.getCollection('text-to-sparql').find()
 4. Compare the generated results with ground truth results.
 5. Save results and evaluation metrics to MongoDB.
 
-## Configuration
-
-Modify configurations (e.g., database URI, dataset paths) in the respective modules:
-
-- Database URI: `src/databases/mongo/mongo.py`
-- QALD Dataset Path: `src/dataset/qald_10.py`
-
 ## Troubleshooting
 
 ### MongoDB Connection Error
@@ -104,10 +83,6 @@ Modify configurations (e.g., database URI, dataset paths) in the respective modu
 ## Contributing
 
 Contributions are welcome! Please fork the repository and submit a pull request with your changes.
-
-## License
-
-This project is licensed under the MIT License. See the `LICENSE` file for details.
 
 ## Acknowledgments
 
