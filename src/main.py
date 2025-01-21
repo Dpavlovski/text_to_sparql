@@ -36,7 +36,7 @@ def perform_multi_querying_with_ranking(question, examples, entity_descriptions,
 
             results = execute_sparql_query(sparql_query)
 
-            if results:
+            if results is not None:
                 return sparql_query, results
             else:
                 print("No results found.")
@@ -49,20 +49,32 @@ def perform_multi_querying_with_ranking(question, examples, entity_descriptions,
 def text_to_sparql(question):
     answers = []
     query = None
-    initial_sparql = get_json_response(zero_shot_sparql(question), list_name="sparql",
+    initial_sparql = None
+    initial_result = None
+
+    try:
+        initial_sparql = get_json_response(zero_shot_sparql(question), list_name="sparql",
                                        system_message="You are a SPARQL query generator.")["sparql"]
-    print(initial_sparql)
-    initial_result = execute_sparql_query(initial_sparql)
-    if initial_result:
+        print(initial_sparql)
+        initial_result = execute_sparql_query(initial_sparql)
+    except Exception as e:
+        print(f"Error during query: {e}")
+
+    if initial_result is not None:
         print("Query:")
         print(initial_sparql)
         print("Result:")
-        for row in initial_result:
-            for var, value in row.items():
+        if isinstance(initial_result, list):
+            for row in initial_result:
+                for var, value in row.items():
                     print(f"{var}: {value['value']}")
                     answers.append(f"{var}: {value['value']}")
-            print()
+                print()
+        elif isinstance(initial_result, bool):
+            print(initial_result)
+            return initial_sparql, initial_result
         return initial_sparql, answers
+
     else:
         examples = extract_search_objects(question, collection_name="lcquad2_0")
 
@@ -94,31 +106,43 @@ def text_to_sparql(question):
                     question, None, entity_descriptions, relations_descriptions
                 )
 
-                if result:
+                answers = []
+
+                if isinstance(result, list):
                     print("Selected Query:")
                     print(query)
-                    print("Results:")
+                    print("\nResults:")
+
                     for row in result:
                         for var, value in row.items():
-                                print(f"{var}: {value['value']}")
-                                answers.append(f"{var}: {value['value']}")
+                            answer = f"{var}: {value['value']}"
+                            print(answer)
+                            answers.append(answer)
                         print()
+
                     return query, answers
-                else:
-                    print("No valid query returned a non-empty result.")
+
+                elif isinstance(result, bool):
+                    print("Selected Query:")
+                    print(query)
+                    print("\nResult:")
+                    print(result)
+
+                    return query, [result]
 
             except Exception as e:
                 print(f"An error occurred during attempt {i + 1}: {e}")
 
         else:
             print("All attempts failed. No valid SPARQL query returned results.")
-            return query, "No results found."
+            return query, []
 
 
 def main():
-    question = "Who invented the telephone?"
+    question = "Which country was Bill Gates born in?"
 
     text_to_sparql(question)
-#
-# if __name__ == "__main__":
-#     main()
+
+
+if __name__ == "__main__":
+    main()

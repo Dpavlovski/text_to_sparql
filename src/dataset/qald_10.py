@@ -12,9 +12,22 @@ def load_qald_json() -> list[dict[str, Any]]:
     for question in questions:
         q = question['question'][0]['string']
         ground_truth_sparql = question['query']['sparql']
-        expected_result = question['answers'][0].get('results', "No results found.")
-        if expected_result != "No results found.":
-            expected_result = expected_result['bindings'][0]['result']['value']
+
+        if 'boolean' in question['answers'][0]:
+            expected_result = question['answers'][0]['boolean']
+        elif 'results' in question['answers'][0]:
+            results = question['answers'][0]['results']
+            if 'bindings' in results and results['bindings']:
+                expected_result = [
+                    binding['result']['value']
+                    for binding in results['bindings']
+                    if 'result' in binding and 'value' in binding['result']
+                ]
+            else:
+                expected_result = "No results found."
+        else:
+            expected_result = "No results found."
+
         row = {
             "question": q,
             "ground_truth_sparql": ground_truth_sparql,
@@ -23,5 +36,3 @@ def load_qald_json() -> list[dict[str, Any]]:
         rows.append(row)
 
     return rows
-
-# print(load_qald_json())
