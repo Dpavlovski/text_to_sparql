@@ -3,7 +3,7 @@ from typing import Any
 
 
 def load_qald_json() -> list[dict[str, Any]]:
-    with open("../dataset/qald_10.json", "r", encoding="utf-8") as f:
+    with open("qald_10.json", "r", encoding="utf-8") as f:
         data = json.load(f)
 
     questions = data.get("questions", [])

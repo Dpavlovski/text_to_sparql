@@ -34,6 +34,3 @@ def embedd_dataset():
             logging.error(f"Error processing record with question: {question}. Error: {e}")
 
     logging.info("Embedding process completed successfully.")
-
-
-embedd_dataset()

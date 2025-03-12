@@ -2,9 +2,11 @@ import json
 import os
 
 import requests
+from dotenv import load_dotenv
 
 
 def chat_with_ollama(message: str, system_message: str, temperature: float = 1.0, top_p: float = 1.0) -> str:
+    load_dotenv()
     url = os.getenv("OLLAMA_API_URL")
     headers = {
         'Content-Type': 'application/json',
@@ -39,3 +41,5 @@ def chat_with_ollama(message: str, system_message: str, temperature: float = 1.0
         return "Error decoding JSON response."
     except Exception as e:
         return f"An unexpected error occurred: {e}"
+
+# print(chat_with_ollama("Hello world!", "Yoa are an AI assistant"))

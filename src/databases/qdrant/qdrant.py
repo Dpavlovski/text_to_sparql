@@ -7,7 +7,7 @@ from qdrant_client import QdrantClient, models
 from qdrant_client.conversions import common_types as types
 from qdrant_client.http.models import Record
 
-from src.llm.embed_content import embed_content
+from src.llm.embed_labels import embed_labels
 
 
 class SearchOutput(BaseModel):
@@ -34,7 +34,7 @@ class QdrantDatabase:
     ):
         self.client.create_collection(
             collection_name=collection_name,
-            vectors_config=models.VectorParams(size=8192, distance=models.Distance.COSINE),
+            vectors_config=models.VectorParams(size=384, distance=models.Distance.COSINE),
         )
 
     def embedd_and_upsert_record(
@@ -48,7 +48,7 @@ class QdrantDatabase:
         metadata = {} if metadata is None else metadata
         metadata["value"] = value
 
-        vector = embed_content(value)
+        vector = embed_labels(value)
         record_id = str(uuid.uuid4()) if unique_id is None else unique_id
 
         self.upsert_record(record_id, collection_name, metadata, vector)
@@ -99,7 +99,7 @@ class QdrantDatabase:
             top_k: int,
             filter: Optional[Dict[str, Any]] = None
     ) -> List[types.ScoredPoint]:
-        query_vector = embed_content(query)
+        query_vector = embed_labels(query)
         return self.search_embeddings(collection_name=collection_name, score_threshold=score_threshold, top_k=top_k,
                                       query_vector=query_vector, filter=filter)
 

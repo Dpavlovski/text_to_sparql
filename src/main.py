@@ -2,36 +2,34 @@ from typing import List
 
 from qdrant_client.http.models import ScoredPoint
 
-from src.databases.qdrant.search_embeddings import extract_search_objects
+from src.databases.qdrant.search_embeddings import fetch_similar_entities
 from src.templates.ner import ner_template
 from src.templates.sparql import sparql_template
 from src.templates.zero_shot_sparql import zero_shot_sparql
-from src.utils.format_results import format_results
 from src.utils.json__extraction import get_json_response
-from src.wikidata.api import search_wikidata, execute_sparql_query
+from src.wikidata.api import execute_sparql_query
 
 
 def get_ner_results(question: str) -> dict:
     return get_json_response(
         ner_template(question),
-        list_name="nodes",
-        system_message="You are a Wikidata entity and relation extraction assistant."
+        list_name="labels",
+        system_message="You are a Wikidata entity extraction assistant."
     )
 
 
-def get_sparql(question: str, examples: List[ScoredPoint], entity_descriptions: str,
-               relations_descriptions: str) -> dict:
-    sparql_prompt = sparql_template(question, examples, entity_descriptions, relations_descriptions)
+def get_sparql(question: str, examples: List[ScoredPoint], similar_entities: List[ScoredPoint]) -> dict:
+    sparql_prompt = sparql_template(question, examples, similar_entities)
 
     return get_json_response(sparql_prompt, list_name="sparql",
                              system_message="You are a SPARQL query generator.")["sparql"]
 
 
-def perform_multi_querying_with_ranking(question, examples, entity_descriptions, relations_descriptions):
+def perform_multi_querying_with_ranking(question, examples, similar_entities, ):
     sparql_query = None
     for i in range(5):
         try:
-            sparql_query = get_sparql(question, examples, entity_descriptions, relations_descriptions)
+            sparql_query = get_sparql(question, examples, similar_entities)
             print(f"Query {i + 1}: {sparql_query}")
 
             results = execute_sparql_query(sparql_query)
@@ -76,7 +74,7 @@ def text_to_sparql(question):
         return initial_sparql, answers
 
     else:
-        examples = extract_search_objects(question, collection_name="lcquad2_0")
+        # examples = extract_search_objects(question, collection_name="lcquad2_0")
 
         tries = 3
         for i in range(tries):
@@ -85,25 +83,11 @@ def text_to_sparql(question):
             try:
                 ner_results = get_ner_results(question)
 
-                entities = [result['wikidata_label'] for result in ner_results["nodes"] if
-                            result['wikidata_type'] == "item"]
-                relations = [result['wikidata_label'] for result in ner_results["nodes"] if
-                             result['wikidata_type'] == "property"]
-
-                entity_results = search_wikidata(entities, "item")
-                relation_results = search_wikidata(relations, "property")
-
-                entity_descriptions, relations_descriptions = format_results(entity_results, relation_results)
-
-                print(f"Entity Description: {entity_descriptions}")
-                print(f"Relation Description: {relations_descriptions}")
-
-                print("Examples:")
-                print(examples)
+                similar_entities = fetch_similar_entities(ner_results["labels"], ner_results["lang"])
 
                 print("Generated SPARQL Queries:")
                 query, result = perform_multi_querying_with_ranking(
-                    question, None, entity_descriptions, relations_descriptions
+                    question, None, similar_entities,
                 )
 
                 answers = []
@@ -139,7 +123,7 @@ def text_to_sparql(question):
 
 
 def main():
-    question = "Which country was Bill Gates born in?"
+    question = ""
 
     text_to_sparql(question)
 

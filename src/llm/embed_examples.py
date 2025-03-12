@@ -1,13 +1,11 @@
-from typing import List
-
 from langchain.embeddings import CacheBackedEmbeddings
 from langchain.storage import LocalFileStore
 from langchain_ollama import OllamaEmbeddings
 
 
-def embed_content(
+def embed_examples(
         content: str
-) -> List[float]:
+) -> list[float] | None:
     model = "llama3.1:70b"
     ollama_embeddings = OllamaEmbeddings(
         model=model,

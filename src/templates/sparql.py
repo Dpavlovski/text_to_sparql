@@ -2,26 +2,29 @@ from typing import List
 
 from qdrant_client.http.models import ScoredPoint
 
+from src.utils.format_entities import format_entities
 from src.utils.format_examples import format_examples
 
 
-def sparql_template(question: str, examples: List[ScoredPoint], entity_descriptions: str, relations_descriptions: str):
+def sparql_template(question: str, examples: List[ScoredPoint], similar_entities: List[ScoredPoint]) -> str:
     formatted_examples = f"Examples:\n{format_examples(examples)}" if examples else ""
-    entity_descriptions = f"Entities:\n{entity_descriptions}" if entity_descriptions else ""
-    relations_descriptions = f"Relations:\n{relations_descriptions}" if relations_descriptions else ""
+    formatted_entities = f"Entities:\n{format_entities(similar_entities)}" if similar_entities else ""
 
-    return f"""You are an AI that generates precise SPARQL queries to answer the given question related to Wikidata knowledge graph. 
-Your task is to carefully select the most relevant entities and relations from the provided options in order to answer the question. Use only the provided entities and relations.
-Carefully determine whether is a "SELECT" or "ASK" query.
-You must only return the sparql query in json format with key 'sparql' and nothing else.
+    return f"""You are an AI designed to generate precise SPARQL queries for retrieving information from the Wikidata knowledge graph. 
+
+Your task:
+- Use only the provided entities to construct the query.
+- Determine whether a "SELECT" or "ASK" query is more appropriate.
+- Return only the SPARQL query in JSON format with the key 'sparql', without any additional text.
 
 {formatted_examples}
 
 Question: {question}
 
-{entity_descriptions}
+{formatted_entities}
 
-{relations_descriptions}
-
-Return in json format with key 'sparql'.
+Output format (JSON):
+{{
+  "sparql": "<SPARQL_QUERY_HERE>"
+}}
 """

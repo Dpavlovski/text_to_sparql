@@ -1,19 +1,16 @@
 def ner_template(question):
-    return f"""Given the user question below your job is to search wikidata_api and return all relevant items and properties which are connected to the context.
-Question: 
-{question}
-            
-Important: The search must be relevant to the question. Make sure the items and properties exists in Wikidata. Dont extract anything outside the question.
+    return f"""Your task is to extract all relevant keywords and phrases from the given question that could help in identifying Wikidata labels. This includes both proper names (e.g., organizations, persons, locations) and important common nouns and verbs that are essential to understanding the question. Also, identify the language of the question.
 
-Return the extracted information in valid JSON format. Do not include any other text or comments.
-Output:
-{{  
-    "nodes": [
-       {{
-         "wikidata_id": "",
-         "wikidata_label": "",
-         "wikidata_type": ""  // Use "item" or "property"
-       }}
-    ]
+Question: {question}
+
+Output Format:
+Return the extracted information in **valid JSON** format with the following structure:
+{{
+    "labels": [
+        <label1>,
+        <label2>,
+        ...
+    ],
+    "lang": "<language_code>"
 }}
 """
