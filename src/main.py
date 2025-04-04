@@ -2,7 +2,7 @@ from typing import List
 
 from qdrant_client.http.models import ScoredPoint
 
-from src.databases.qdrant.search_embeddings import fetch_similar_entities
+from src.databases.qdrant.search_embeddings import fetch_similar_entities, extract_search_objects
 from src.templates.ner import ner_template
 from src.templates.sparql import sparql_template
 from src.templates.zero_shot_sparql import zero_shot_sparql
@@ -74,7 +74,7 @@ def text_to_sparql(question):
         return initial_sparql, answers
 
     else:
-        # examples = extract_search_objects(question, collection_name="lcquad2_0")
+        examples = extract_search_objects(question, collection_name="lcquad2_0")
 
         tries = 3
         for i in range(tries):
@@ -127,6 +127,5 @@ def main():
 
     text_to_sparql(question)
 
-
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()

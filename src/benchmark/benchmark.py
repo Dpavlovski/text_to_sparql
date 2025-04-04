@@ -2,10 +2,10 @@ from typing import Any
 
 from matplotlib import pyplot as plt
 
+from src.databases.mongo.models.Embedding_QALD_10 import EmbeddingQALD10
 from src.databases.mongo.mongo import MongoDBDatabase
+from src.dataset.qald_10 import load_qald_json
 from src.main import text_to_sparql
-from src.templates.evaluation import evaluation_template
-from src.utils.json__extraction import get_json_response
 
 
 def test_on_qald_10(benchmark_data: list[dict[str, Any]]):
@@ -17,21 +17,15 @@ def test_on_qald_10(benchmark_data: list[dict[str, Any]]):
 
         generated_sparql, result = text_to_sparql(question)
 
-        prompt = evaluation_template(ground_truth_sparql, generated_sparql, expected_result, result)
-        response = get_json_response(prompt)
+        entry = EmbeddingQALD10(
+            question=question,
+            ground_truth_sparql=ground_truth_sparql,
+            expected_result=expected_result,
+            generated_sparql=generated_sparql,
+            result=result
+        )
 
-        entry = {
-            "question": question,
-            "ground_truth_sparql": ground_truth_sparql,
-            "expected_result": expected_result,
-            "generated_sparql": generated_sparql,
-            "result": result,
-            "correct_query": response['Query Equivalent'],
-            "correct_result": response['Result Equivalent'],
-            "reason": response['Reason']
-        }
-
-        db.add_entry_dict(entity=entry, collection_name="text-to-sparql")
+        db.add_entry(entity=entry)
 
 
 def evaluate_correctness():
@@ -86,7 +80,8 @@ def plot_results():
     except Exception as e:
         print(f"An error occurred while plotting results: {e}")
 
-# test_on_qald_10(load_qald_json())
+
+test_on_qald_10(load_qald_json())
 # print("Correct queries: " + str(evaluate_correctness()) + "/" + str(len(load_qald_json())))
 # print("Accuracy: " + str(calculate_accuracy()))
 # plot_results()

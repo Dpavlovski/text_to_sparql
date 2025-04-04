@@ -7,6 +7,7 @@ from qdrant_client import QdrantClient, models
 from qdrant_client.conversions import common_types as types
 from qdrant_client.http.models import Record
 
+from src.llm.embed_examples import embed_examples
 from src.llm.embed_labels import embed_labels
 
 
@@ -99,7 +100,11 @@ class QdrantDatabase:
             top_k: int,
             filter: Optional[Dict[str, Any]] = None
     ) -> List[types.ScoredPoint]:
-        query_vector = embed_labels(query)
+
+        if collection_name == "lcquad2_0":
+            query_vector = embed_examples(query)
+        else:
+            query_vector = embed_labels(query)
         return self.search_embeddings(collection_name=collection_name, score_threshold=score_threshold, top_k=top_k,
                                       query_vector=query_vector, filter=filter)
 
