@@ -5,7 +5,7 @@ from typing import List
 from tqdm import tqdm
 
 from src.databases.qdrant.qdrant import QdrantDatabase
-from src.dataset.qald_10_results_embedings import load_qald_results
+from src.dataset.qald_10_results_embedings import extract_qald_query_ids
 from src.utils.format_uri import extract_id_from_uri
 from src.wikidata.api import fetch_wikidata_labels
 
@@ -15,10 +15,10 @@ def embedd_labels():
     logging.info("Starting the embedding process...")
 
     qdb = QdrantDatabase()
-    results = load_qald_results()
-    entity_ids: List[str] = [extract_id_from_uri(uri) for uri in results]
+    ids = extract_qald_query_ids()
+    entity_ids: List[str] = [extract_id_from_uri(uri) for uri in ids]
 
-    logging.info(f"Results loaded with {len(results)} records.")
+    logging.info(f"Results loaded with {len(ids)} records.")
 
     labels_map = fetch_wikidata_labels(entity_ids)
     logging.info("Labels fetched.")

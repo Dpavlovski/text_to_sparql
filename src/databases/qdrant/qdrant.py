@@ -8,7 +8,7 @@ from qdrant_client.conversions import common_types as types
 from qdrant_client.http.models import Record
 
 from src.llm.embed_examples import embed_examples
-from src.llm.embed_labels import embed_labels
+from src.llm.embed_labels import embed_value
 
 
 class SearchOutput(BaseModel):
@@ -31,12 +31,33 @@ class QdrantDatabase:
 
     def create_collection(
             self,
-            collection_name: str
+            collection_name: str,
+            vector_size: int = 384,
+            distance: models.Distance = models.Distance.COSINE
     ):
-        self.client.create_collection(
-            collection_name=collection_name,
-            vectors_config=models.VectorParams(size=384, distance=models.Distance.COSINE),
-        )
+        try:
+            if not self.collection_exists(collection_name):
+                self.client.create_collection(
+                    collection_name=collection_name,
+                    vectors_config=models.VectorParams(
+                        size=vector_size,
+                        distance=distance
+                    ),
+                )
+            else:
+                collection_info = self.client.get_collection(collection_name)
+                if (collection_info.config.params.vectors.size != vector_size or
+                        collection_info.config.params.vectors.distance != distance):
+                    raise ValueError(
+                        f"Existing collection {collection_name} has incompatible configuration. "
+                        f"Expected size={vector_size}, distance={distance}, "
+                        f"found size={collection_info.config.params.vectors.size}, "
+                        f"distance={collection_info.config.params.vectors.distance}"
+                    )
+        except Exception as e:
+            if "already exists" in str(e):
+                return
+            raise RuntimeError(f"Failed to create/verify collection {collection_name}: {str(e)}")
 
     def embedd_and_upsert_record(
             self,
@@ -49,7 +70,7 @@ class QdrantDatabase:
         metadata = {} if metadata is None else metadata
         metadata["value"] = value
 
-        vector = embed_labels(value)
+        vector = embed_value(value)
         record_id = str(uuid.uuid4()) if unique_id is None else unique_id
 
         self.upsert_record(record_id, collection_name, metadata, vector)
@@ -104,7 +125,7 @@ class QdrantDatabase:
         if collection_name == "lcquad2_0":
             query_vector = embed_examples(query)
         else:
-            query_vector = embed_labels(query)
+            query_vector = embed_value(query)
         return self.search_embeddings(collection_name=collection_name, score_threshold=score_threshold, top_k=top_k,
                                       query_vector=query_vector, filter=filter)
 
@@ -142,17 +163,21 @@ class QdrantDatabase:
         if not self.collection_exists(collection_name):
             self.create_collection(collection_name)
 
-        self.client.upsert(
-            collection_name=collection_name,
-            points=[models.PointStruct(
-                id=unique_id,
-                payload=payload,
-                vector=vector,
-            ), ]
-
-        )
-
-        return self.retrieve_point(collection_name, unique_id)
+        try:
+            self.client.upsert(
+                collection_name=collection_name,
+                points=[models.PointStruct(
+                    id=unique_id,
+                    payload=payload,
+                    vector=vector,
+                )]
+            )
+            return self.retrieve_point(collection_name, unique_id)
+        except Exception as e:
+            if "Not found: Collection" in str(e):
+                self.create_collection(collection_name)
+                return self.upsert_record(unique_id, collection_name, payload, vector)
+            raise RuntimeError(f"Failed to upsert record: {str(e)}")
 
     def delete_points(
             self,

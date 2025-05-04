@@ -28,22 +28,5 @@ services:
       ME_CONFIG_MONGODB_ADMINPASSWORD: example
       ME_CONFIG_MONGODB_SERVER: mongodb
 
-  wikidata:
-    image: qacompany/qendpoint-wikidata:latest
-    container_name: wikidata
-    ports:
-      - "1234:1234"
-    environment:
-      HDT_BASE: wikidata_all
-    volumes:
-      - ./wikidata_data:/data
-    restart: unless-stopped
-    healthcheck:
-      test: [ "CMD-SHELL", "curl --fail http://localhost:1234/status || exit 1" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
 volumes:
   mongo_data:
-  wikidata_data:

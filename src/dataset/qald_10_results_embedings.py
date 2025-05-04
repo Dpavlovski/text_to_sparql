@@ -1,32 +1,30 @@
 import json
+import re
+from typing import List, Optional
 
 
-def load_qald_results() -> list[str]:
-    with open("C:\\Users\\User\PycharmProjects\\text_to_sparql\\src\\dataset\\qald_10.json", "r",
-              encoding="utf-8") as f:
-        data = json.load(f)
+def extract_qald_query_ids() -> Optional[List[str]]:
+    file_path = r"C:\Users\User\PycharmProjects\text_to_sparql\src\dataset\qald_10.json"
+
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        print(f"Error: File not found at {file_path}")
+        return None
+    except json.JSONDecodeError:
+        print("Error: Invalid JSON format in the file.")
+        return None
 
     questions = data.get("questions", [])
+    extracted_items = set()
 
-    expected_results = []
     for question in questions:
+        sparql_query = question.get("query", {}).get("sparql", "")
+        if sparql_query:
+            extracted_items.update(re.findall(r"(?:wd:|wdt:)([QP]\d+)", sparql_query))
 
-        if 'boolean' in question['answers'][0]:
-            continue
-        elif 'results' in question['answers'][0]:
-            results = question['answers'][0]['results']
-            if 'bindings' in results and results['bindings']:
-                expected_result = [
-                    binding['result']['value']
-                    for binding in results['bindings']
-                    if 'result' in binding and 'value' in binding['result']
-                ]
-            else:
-                continue
-        else:
-            continue
-        expected_results.extend(expected_result)
+    return extracted_items if extracted_items else None
 
-    filtered_results = [r for r in expected_results if r.startswith("http://www.wikidata.org")]
 
-    return filtered_results
+print(extract_qald_query_ids())

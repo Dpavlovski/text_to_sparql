@@ -85,11 +85,11 @@ def main(args):
 
 if __name__ == "__main__":
     args = get_arg_parser().parse_args([
-        # "--input_file", "latest-all.json.bz2",
+        "--input_file", "../../../wikidata_data/latest-all.json.bz2",
         "--out_dir", "data_processed",
         "--processes", "32",
-        "--batch_size", "50000",
-        # "--num_lines_read", "1000",
+        "--batch_size", "300",
+        "--num_lines_read", "1000",
         "--num_lines_in_dump", "115188728"
     ])
 

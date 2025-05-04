@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict
 
 from qdrant_client.http.models import ScoredPoint
 
@@ -16,6 +16,38 @@ def get_ner_results(question: str) -> dict:
         list_name="labels",
         system_message="You are a Wikidata entity extraction assistant."
     )
+
+
+def get_neighbors(node_id: str, hops: int = 1, limit: int = 5, direction: str = "both") -> List[Dict]:
+    if not node_id.upper().startswith(("Q", "P")):
+        raise ValueError("Invalid node ID. Must start with Q or P")
+
+    wd_entity = f"wd:{node_id.upper()}"
+
+    direction_filters = []
+    if direction in ("out", "both"):
+        direction_filters.append(f"?node ?p ?neighbor .")
+    if direction in ("in", "both"):
+        direction_filters.append(f"?neighbor ?p ?node .")
+
+    query = f"""
+        SELECT DISTINCT ?neighbor
+        WHERE {{
+            VALUES ?node {{ {wd_entity} }}
+
+            {{
+                ?node {" ?p1 ?neighbor1 . " if hops >= 1 else ""}
+                {" ?neighbor1 ?p2 ?neighbor2 . " if hops >= 2 else ""}
+                {" ?neighbor2 ?p3 ?neighbor3 . " if hops >= 3 else ""}
+            }}
+            BIND({f"?neighbor{hops}" if hops > 0 else "?node"} AS ?neighbor)
+            FILTER(?neighbor != {wd_entity}) 
+        }}
+        LIMIT {limit}
+    """
+
+    results = execute_sparql_query(query)
+    return results
 
 
 def get_sparql(question: str, examples: List[ScoredPoint], similar_entities: List[ScoredPoint]) -> dict:
@@ -52,7 +84,7 @@ def text_to_sparql(question):
 
     try:
         initial_sparql = get_json_response(zero_shot_sparql(question), list_name="sparql",
-                                       system_message="You are a SPARQL query generator.")["sparql"]
+                                           system_message="You are a SPARQL query generator.")["sparql"]
         print(initial_sparql)
         initial_result = execute_sparql_query(initial_sparql)
     except Exception as e:
@@ -64,9 +96,9 @@ def text_to_sparql(question):
         print("Result:")
         if isinstance(initial_result, list):
             for row in initial_result:
-                for var, value in row.items():
-                    print(f"{var}: {value['value']}")
-                    answers.append(f"{var}: {value['value']}")
+                for value in row:
+                    print(value)
+                    answers.append(value)
                 print()
         elif isinstance(initial_result, bool):
             print(initial_result)
@@ -85,9 +117,13 @@ def text_to_sparql(question):
 
                 similar_entities = fetch_similar_entities(ner_results["labels"], ner_results["lang"])
 
+                # neighbors = get_neighbors(similar_entities[0].payload.get("id"), hops=1, limit=5)
+                # print("Neighbors:")
+                # print(neighbors)
+
                 print("Generated SPARQL Queries:")
                 query, result = perform_multi_querying_with_ranking(
-                    question, None, similar_entities,
+                    question, examples, similar_entities,
                 )
 
                 answers = []
@@ -98,8 +134,8 @@ def text_to_sparql(question):
                     print("\nResults:")
 
                     for row in result:
-                        for var, value in row.items():
-                            answer = f"{var}: {value['value']}"
+                        for value in row:
+                            answer = value
                             print(answer)
                             answers.append(answer)
                         print()
@@ -123,9 +159,10 @@ def text_to_sparql(question):
 
 
 def main():
-    question = ""
+    question = "Which country was Bill Gates born in?"
 
     text_to_sparql(question)
 
-# if __name__ == "__main__":
-#     main()
+
+if __name__ == "__main__":
+    main()
