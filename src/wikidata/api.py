@@ -1,11 +1,8 @@
 import json
-import logging
-from typing import Any, List, Dict
+from typing import Any
 
 import requests
 from SPARQLWrapper import SPARQLWrapper, JSON
-from tqdm import tqdm
-from wikidata.client import Client
 
 
 def fetch_wikidata(params) -> str | Any:
@@ -22,21 +19,18 @@ def fetch_wikidata(params) -> str | Any:
         return f"An error occurred: {e}"
 
 
-def search_wikidata(keywords, keyword_type):
+def search_wikidata(keyword, lang="en"):
     results = []
-    for keyword in keywords:
-        params = {
-            "action": "wbsearchentities",
-            "search": keyword,
-            "language": "en",
-            "type": keyword_type,
-            "format": "json",
-            "limit": 5
-        }
-        wikidata_result = fetch_wikidata(params)
-        print(f"Wikidata Results for {keyword_type} '{keyword}':", wikidata_result)
-        if isinstance(wikidata_result, dict):
-            results.extend(wikidata_result["search"])
+    params = {
+        "action": "wbsearchentities",
+        "search": keyword,
+        "language": lang,
+        "format": "json",
+        "limit": 5
+    }
+    wikidata_result = fetch_wikidata(params)
+    if isinstance(wikidata_result, dict):
+        results.extend(wikidata_result["search"])
     return results
 
 
@@ -59,45 +53,8 @@ def execute_sparql_query(query):
         elif "boolean" in responses:
             return responses["boolean"]
 
-        return None
+        return []
 
     except Exception as e:
         print(f"An error occurred while processing the SPARQL response: {e}")
         raise
-
-
-def fetch_wikidata_labels(entity_ids: List[str]) -> Dict[str, List[dict]]:
-    logging.basicConfig(level=logging.INFO)
-    logging.info("Fetching labels for given Wikidata entity URIs...")
-
-    client = Client()
-    labels_map: Dict[str, List[dict]] = {}
-
-    for entity_id in tqdm(entity_ids, desc="Fetching labels"):
-        try:
-            entity = client.get(entity_id, load=True)
-
-            while hasattr(entity, 'id') and entity.id != entity_id:
-                logging.info(f"{entity_id} is a redirect. Redirecting to {entity.id}")
-                entity_id = entity.id
-                entity = client.get(entity_id, load=True)
-
-            if len(entity.label) == 0:
-                logging.info(f"{entity_id} is missing a label. Skipping.")
-                continue
-
-            label_entries = []
-            for lang, label in entity.label.items():
-                description = entity.description.get(lang, "") if hasattr(entity, 'description') else ""
-                label_entries.append({
-                    "label": label,
-                    "description": description,
-                    "language": lang
-                })
-
-            labels_map[entity_id] = label_entries
-        except Exception as e:
-            logging.error(f"Error fetching label for {entity_id}: {e}")
-            labels_map[entity_id] = []
-
-    return labels_map

@@ -43,3 +43,8 @@ def chat_with_ollama(message: str, system_message: str, temperature: float = 1.0
         return f"An unexpected error occurred: {e}"
 
 # print(chat_with_ollama("Hello world!", "Yoa are an AI assistant"))
+# llm = Ollama(
+# model=model,
+# base_url="https://llama3.finki.ukim.mk",
+# format="json"
+# )

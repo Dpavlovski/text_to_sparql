@@ -1,12 +1,12 @@
-from typing import List, Optional
+from typing import List, Optional, Any
 
-from qdrant_client.grpc import ScoredPoint
-from qdrant_client.models import ScoredPoint  # Ensure this matches your Qdrant setup
+from qdrant_client.http.models import ScoredPoint
 
 from src.databases.qdrant.qdrant import QdrantDatabase
+from src.wikidata.api import search_wikidata
 
 
-def extract_search_objects(
+def search_embeddings(
         value: str,
         collection_name: str,
         lang: Optional[str] = None
@@ -26,8 +26,9 @@ def extract_search_objects(
     )
 
 
-def fetch_similar_entities(labels: List[str], lang: str) -> List[ScoredPoint]:
+def fetch_similar_entities(labels: List[str], lang: str) -> List[Any]:
     similar_entities: List[ScoredPoint] = []
     for label in labels:
-        similar_entities.extend(extract_search_objects(value=label, lang=lang, collection_name="qald_10_labels"))
+        similar_entities.extend(search_wikidata(keyword=label, lang=lang))
+        similar_entities.extend(search_embeddings(value=label, lang=lang, collection_name="qald_10_labels"))
     return similar_entities

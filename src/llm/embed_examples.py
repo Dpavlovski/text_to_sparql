@@ -1,3 +1,5 @@
+import os
+
 from langchain.embeddings import CacheBackedEmbeddings
 from langchain.storage import LocalFileStore
 from langchain_ollama import OllamaEmbeddings
@@ -6,7 +8,7 @@ from langchain_ollama import OllamaEmbeddings
 def embed_examples(
         content: str
 ) -> list[float] | None:
-    model = "llama3.1:70b"
+    model = os.getenv("OLLAMA_MODEL")
     ollama_embeddings = OllamaEmbeddings(
         model=model,
         base_url="https://llama3.finki.ukim.mk",
