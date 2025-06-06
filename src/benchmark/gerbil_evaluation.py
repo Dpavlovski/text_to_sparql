@@ -60,4 +60,4 @@ def evaluation(benchmark_data: list[dict[str, Any]], file_name: str):
         json.dump(qald_data, f, ensure_ascii=False, indent=4)
 
 
-evaluation(load_qald_json(), 'embedding_all_steps.json')
+evaluation(load_qald_json(), 'results/elastic_search_only.json')

@@ -2,13 +2,13 @@ from typing import List
 
 from qdrant_client.http.models import ScoredPoint
 
-from src.utils.format_entities import format_entities
 from src.utils.format_examples import format_examples
 
 
-def sparql_template(question: str, examples: List[ScoredPoint], similar_entities: List[ScoredPoint]) -> str:
+def sparql_template(question: str, examples: List[ScoredPoint], entity_descriptions, relations_descriptions) -> str:
     formatted_examples = f"Examples:\n{format_examples(examples)}" if examples else ""
-    formatted_entities = f"Entities:\n{format_entities(similar_entities)}" if similar_entities else ""
+    entity_descriptions = f"Entities:\n{entity_descriptions}" if entity_descriptions else ""
+    relations_descriptions = f"Relations:\n{relations_descriptions}" if relations_descriptions else ""
 
     return f"""You are an AI designed to generate precise SPARQL queries for retrieving information from the Wikidata knowledge graph. 
 
@@ -21,7 +21,9 @@ Your task:
 
 Question: {question}
 
-{formatted_entities}
+{entity_descriptions}
+
+{relations_descriptions}
 
 Output format (JSON):
 {{

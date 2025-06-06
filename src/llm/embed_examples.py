@@ -6,7 +6,7 @@ from langchain_ollama import OllamaEmbeddings
 def embed_examples(
         content: str
 ) -> list[float] | None:
-    model = "llama3.1:70b"
+    model = "llama3.3:70b"
     ollama_embeddings = OllamaEmbeddings(
         model=model,
         base_url="https://llama3.finki.ukim.mk",
