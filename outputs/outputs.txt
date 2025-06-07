@@ -1,0 +1,57 @@
+Initial attempt to generate sparql query with zero-shot.
+SELECT ?country WHERE { wd:Q8157 wdt:P19 ?birthPlace . ?birthPlace wdt:P17 ?country . }
+
+Entering pipeline...
+Attempt 1/3 to generate and execute SPARQL query.
+NER results:
+{'nodes': [{'wikidata_id': 'Q815', 'wikidata_label': 'Bill Gates', 'wikidata_type': 'item'}, {'wikidata_id': 'P19', 'wikidata_label': 'place of birth', 'wikidata_type': 'property'}, {'wikidata_id': 'Q30', 'wikidata_label': 'United States', 'wikidata_type': 'item'}]}
+
+DFSL Examples:
+
+        Question:
+            What country is Santa Monica in where Fred MacMurray died?
+        Output:
+            SELECT ?value WHERE { wd:Q356309 p:P20 ?s . ?s ps:P20 wd:Q47164 . ?s pq:P17 ?value}
+
+        Question:
+            In what country was the pope born in?
+        Output:
+             select distinct ?obj where { wd:Q19546 wdt:P1001 ?obj . ?obj wdt:P31 wd:Q3024240 }
+
+        Question:
+            Where was the contestant, Kiri born?
+        Output:
+            SELECT ?answer WHERE { wd:Q48699802 wdt:P161 ?X . ?X wdt:P19 ?answer}
+
+        Question:
+            In what country was Juan Rodriguez Suarez executed?
+        Output:
+            SELECT ?answer WHERE { wd:Q598409 wdt:P157 ?X . ?X wdt:P172 ?answer}
+
+        Question:
+            Montevideo is the capital of what state?
+        Output:
+             select distinct ?obj where { wd:Q1335 wdt:P1376 ?obj . ?obj wdt:P31 wd:Q3624078 }
+
+
+Search Wikidata for similar entities:
+Entity Description: Entity: Bill Gates (ID: Q5284) - American businessman, investor, and philanthropist (born 1955)
+Entity: Bill Gates Sr. (ID: Q684014) - American attorney and philanthropist (1925–2020)
+Entity: Bill Gates (ID: Q1181671) - Wikimedia disambiguation page
+Entity: Bill Gates (ID: Q123411797) - English footballer (1944–2023)
+Entity: Bill Gates (ID: Q100794547) - college basketball player (1959–1959) Boston University
+Entity: United States (ID: Q30) - country located primarily in North America
+Entity: United States Census Bureau (ID: Q637413) - U.S. agency responsible for the census and related statistics
+Entity: United States Virgin Islands (ID: Q11703) - unincorporated territory of the United States of America
+Entity: United States dollar (ID: Q4917) - official currency of the United States
+Entity: National Gallery of Art (ID: Q214867) - national art museum in Washington, D.C.
+Relation Description: Relation: place of birth (ID: P19) - most specific known birth location of a person, animal or fictional character
+
+Generated SPARQL Queries:
+Query 1: SELECT ?answer WHERE { wd:Q5284 wdt:P19 ?X . ?X wdt:P17 ?answer }
+
+Selected Query:
+SELECT ?answer WHERE { wd:Q5284 wdt:P19 ?X . ?X wdt:P17 ?answer }
+
+Results:
+http://www.wikidata.org/entity/Q30

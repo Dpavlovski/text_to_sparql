@@ -31,7 +31,7 @@ def search_wikidata(keywords, keyword_type):
             "limit": 5
         }
         wikidata_result = fetch_wikidata(params)
-        print(f"Wikidata Results for {keyword_type} '{keyword}':", wikidata_result)
+        # print(f"Wikidata Results for {keyword_type} '{keyword}':", wikidata_result)
         if isinstance(wikidata_result, dict):
             results.extend(wikidata_result["search"])
     return results

@@ -2,8 +2,11 @@ from typing import List, Dict
 
 from qdrant_client.http.models import ScoredPoint
 
+from src.databases.qdrant.search_embeddings import extract_search_objects
 from src.templates.ner import ner_template
 from src.templates.sparql import sparql_template
+from src.templates.zero_shot_sparql import zero_shot_sparql
+from src.utils.format_examples import format_examples
 from src.utils.format_results import format_results
 from src.utils.json__extraction import get_json_response
 from src.wikidata.api import execute_sparql_query, search_wikidata
@@ -81,86 +84,93 @@ def text_to_sparql(question):
     initial_sparql = None
     initial_result = None
 
-    # try:
-    #     initial_sparql = get_json_response(zero_shot_sparql(question), list_name="sparql",
-    #                                        system_message="You are a SPARQL query generator.")["sparql"]
-    #     print(initial_sparql)
-    #     initial_result = execute_sparql_query(initial_sparql)
-    # except Exception as e:
-    #     print(f"Error during query: {e}")
-    #
-    # if initial_result is not None:
-    #     print("Query:")
-    #     print(initial_sparql)
-    #     print("Result:")
-    #     if isinstance(initial_result, list):
-    #         for row in initial_result:
-    #             for value in row:
-    #                 print(value)
-    #                 answers.append(value)
-    #             print()
-    #     elif isinstance(initial_result, bool):
-    #         print(initial_result)
-    #         return initial_sparql, initial_result
-    #     return initial_sparql, answers
-    #
-    # else:
-    # examples = extract_search_objects(question, collection_name="lcquad2_0")
+    try:
+        print("Initial attempt to generate sparql query with zero-shot.")
+        initial_sparql = get_json_response(zero_shot_sparql(question), list_name="sparql",
+                                           system_message="You are a SPARQL query generator.")["sparql"]
+        print(initial_sparql)
+        initial_result = execute_sparql_query(initial_sparql)
+    except Exception as e:
+        print(f"Error during query: {e}")
 
-    tries = 3
-    for i in range(tries):
-        print(f"Attempt {i + 1}/{tries} to generate and execute SPARQL query.")
-
-        try:
-            ner_results = get_ner_results(question)
-
-            entities = [result['wikidata_label'] for result in ner_results["nodes"] if
-                        result['wikidata_type'] == "item"]
-            relations = [result['wikidata_label'] for result in ner_results["nodes"] if
-                         result['wikidata_type'] == "property"]
-
-            entity_results = search_wikidata(entities, "item")
-            relation_results = search_wikidata(relations, "property")
-
-            entity_descriptions, relations_descriptions = format_results(entity_results, relation_results)
-
-            print(f"Entity Description: {entity_descriptions}")
-            print(f"Relation Description: {relations_descriptions}")
-            print("Generated SPARQL Queries:")
-            query, result = perform_multi_querying_with_ranking(
-                question, None, entity_descriptions, relations_descriptions
-            )
-
-            answers = []
-
-            if isinstance(result, list):
-                print("Selected Query:")
-                print(query)
-                print("\nResults:")
-
-                for row in result:
-                    for value in row:
-                        answer = value
-                        print(answer)
-                        answers.append(answer)
-                    print()
-
-                return query, answers
-
-            elif isinstance(result, bool):
-                print("Selected Query:")
-                print(query)
-                print("\nResult:")
-                print(result)
-
-                return query, [result]
-
-        except Exception as e:
-            print(f"An error occurred during attempt {i + 1}: {e}")
+    if initial_result is not None:
+        print("Query:")
+        print(initial_sparql)
+        print("Result:")
+        if isinstance(initial_result, list):
+            for row in initial_result:
+                for value in row:
+                    print(value)
+                    answers.append(value)
+                print()
+        elif isinstance(initial_result, bool):
+            print(initial_result)
+            return initial_sparql, initial_result
+        return initial_sparql, answers
 
     else:
-        print("All attempts failed. No valid SPARQL query returned results.")
-        return query, []
+        examples = extract_search_objects(question, collection_name="lcquad2_0")
+
+        tries = 3
+        for i in range(tries):
+            print("\nEntering pipeline...")
+            print(f"Attempt {i + 1}/{tries} to generate and execute SPARQL query.")
+
+            try:
+                ner_results = get_ner_results(question)
+                print("NER results:")
+                print(ner_results)
+                print("\nDFSL Examples:")
+                print(format_examples(examples))
+
+                entities = [result['wikidata_label'] for result in ner_results["nodes"] if
+                            result['wikidata_type'] == "item"]
+                relations = [result['wikidata_label'] for result in ner_results["nodes"] if
+                             result['wikidata_type'] == "property"]
+
+                entity_results = search_wikidata(entities, "item")
+                relation_results = search_wikidata(relations, "property")
+
+                entity_descriptions, relations_descriptions = format_results(entity_results, relation_results)
+
+                print("\nSearch Wikidata for similar entities:")
+                print(f"Entity Description: {entity_descriptions}")
+                print(f"Relation Description: {relations_descriptions}")
+                print("\nGenerated SPARQL Queries:")
+                query, result = perform_multi_querying_with_ranking(
+                    question, examples, entity_descriptions, relations_descriptions
+                )
+
+                answers = []
+
+                if isinstance(result, list):
+                    print("\nSelected Query:")
+                    print(query)
+                    print("\nResults:")
+
+                    for row in result:
+                        for value in row:
+                            answer = value
+                            print(answer)
+                            answers.append(answer)
+                        print()
+
+                    return query, answers
+
+                elif isinstance(result, bool):
+                    print("Selected Query:")
+                    print(query)
+                    print("\nResult:")
+                    print(result)
+
+                    return query, [result]
+
+            except Exception as e:
+                print(f"An error occurred during attempt {i + 1}: {e}")
+
+        else:
+            print("All attempts failed. No valid SPARQL query returned results.")
+            return query, []
 
 
 def main():
