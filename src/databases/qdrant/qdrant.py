@@ -8,7 +8,6 @@ from qdrant_client.conversions import common_types as types
 from qdrant_client.http.models import Record
 
 from src.llm.embed_examples import embed_examples
-from src.llm.embed_labels import embed_value
 
 
 class SearchOutput(BaseModel):
@@ -70,6 +69,8 @@ class QdrantDatabase:
         metadata = {} if metadata is None else metadata
         metadata["value"] = value
 
+        from src.llm.embed_labels import embed_value
+
         vector = embed_value(value)
         record_id = str(uuid.uuid4()) if unique_id is None else unique_id
 
@@ -125,6 +126,8 @@ class QdrantDatabase:
         if collection_name == "lcquad2_0":
             query_vector = embed_examples(query)
         else:
+            from src.llm.embed_labels import embed_value
+
             query_vector = embed_value(query)
         return self.search_embeddings(collection_name=collection_name, score_threshold=score_threshold, top_k=top_k,
                                       query_vector=query_vector, filter=filter)

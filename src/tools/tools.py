@@ -1,19 +1,140 @@
 import json
-from typing import Any, Optional, Dict, List
+import os
+from typing import Any, Optional, Dict
 
+from langchain_ollama import OllamaLLM
 from pydantic import BaseModel
 from qdrant_client.http.models import ScoredPoint
 from rdflib.plugins.sparql import prepareQuery
 
+from src.agent.state import GraphState
 from src.databases.qdrant.search_embeddings import fetch_similar_entities, search_embeddings
 from src.llm.generic_chat import generic_chat
 from src.templates.ner import extract_entities
 from src.templates.sparql import sparql_template
 from src.utils.json__extraction import get_json_response
 from src.wikidata.api import execute_sparql_query
-from src.wikidata.dump_processing.test import get_entities_schema, format_schema_output
+
+# Assume your tool functions (tool_get_ner_results, etc.) are defined here
+# I've included them at the bottom in the final script for completeness.
+
+# Initialize the LLM once
+llm = OllamaLLM(
+    model=os.getenv("OLLAMA_MODEL", "llama3"),  # Added default model
+    base_url="https://llama3.finki.ukim.mk",
+    temperature=0,
+)
 
 
+# --- NODE DEFINITIONS ---
+
+def agent_router_node(state: GraphState) -> Dict[str, Any]:
+    """
+    This is the central brain of the agent. It decides the next action.
+    """
+    print("---ROUTING---")
+    if state.get("error"):
+        print(f"Error detected: {state['error']}. Halting.")
+        return {"next_action": "error"}
+
+        # This logic now only runs if there are no errors
+    if not state.get("labels"):
+        action = "Extract_Labels"
+    # Build a prompt describing the current situation
+    prompt_parts = [f"The user's question is: '{state['question']}'."]
+
+    if state.get("error"):
+        prompt_parts.append(f"An error occurred in the last step: {state['error']}. Please decide how to proceed.")
+    if not state.get("labels"):
+        prompt_parts.append("I need to extract entities from the question.")
+        action = "Extract_Labels"
+    elif not state.get("similar_entities"):
+        prompt_parts.append("I have the labels, now I need to find similar entities in Wikidata.")
+        action = "Find_Similar_Entities"
+    elif not state.get("examples"):
+        prompt_parts.append("I also need to find similar examples to help with query generation.")
+        action = "Find_Similar_Examples"
+    elif not state.get("sparql_query"):
+        prompt_parts.append("I have entities and examples. I am ready to generate the SPARQL query.")
+        action = "Generate_SPARQL"
+    elif not state.get("results"):
+        prompt_parts.append("I have a SPARQL query. I need to execute it.")
+        action = "Execute_SPARQL"
+    else:
+        prompt_parts.append("I have executed the query and have the results. I should now formulate the final answer.")
+        action = "finish"
+
+    # For a more advanced router, you would use an LLM call here.
+    # This rule-based approach is simpler and more predictable.
+    # llm_response = llm.invoke(prompt)
+    # action = parse_llm_response(llm_response)
+
+    print(f"Next action: {action}")
+    return {"next_action": action}
+
+
+def extract_labels_node(state: GraphState) -> Dict[str, Any]:
+    """Node to call the Extract_Labels tool."""
+    print("---EXTRACTING LABELS---")
+    question = state["question"]
+    result = tool_get_ner_results({"question": question})
+    if result.success:
+        return {"labels": result.payload["labels"], "lang": result.payload["lang"], "error": None}
+    else:
+        return {"error": result.error}
+
+
+def find_entities_node(state: GraphState) -> Dict[str, Any]:
+    print("---FINDING SIMILAR ENTITIES---")
+    result = tool_fetch_similar_entities({"labels": state["labels"], "lang": state["lang"]})
+    if result.success:
+        # FIX: The payload is already a list of dictionaries. No need to call model_dump().
+        return {"similar_entities": result.payload}
+    else:
+        return {"error": result.error}
+
+
+def find_examples_node(state: GraphState) -> Dict[str, Any]:
+    print("---FINDING EXAMPLES---")
+    result = tool_get_examples({"question": state["question"]})
+    if result.success:
+        # FIX: The payload is already a list of dictionaries. No need to call model_dump().
+        return {"examples": result.payload}
+    else:
+        return {"error": result.error}
+
+
+def generate_sparql_node(state: GraphState) -> Dict[str, Any]:
+    """Node to call the Generate_SPARQL tool."""
+    print("---GENERATING SPARQL---")
+    result = tool_generate_sparql({
+        "question": state["question"],
+        "examples": state["examples"],
+        "similar_entities": state["similar_entities"],
+    })
+    if result.success:
+        return {"sparql_query": result.payload["sparql"], "error": None}
+    else:
+        return {"error": result.error}
+
+
+def execute_sparql_node(state: GraphState) -> Dict[str, Any]:
+    """Node to call the Execute_SPARQL tool."""
+    print("---EXECUTING SPARQL---")
+    result = tool_execute_sparql({"sparql": state["sparql_query"]})
+    if result.success:
+        return {"results": result.payload["results"], "error": None}
+    else:
+        return {"error": result.error}
+
+
+def format_answer_node(state: GraphState) -> Dict[str, Any]:
+    """Node to format the final answer for the user."""
+    print("---FORMATTING FINAL ANSWER---")
+    # This could be a simple summary or a sophisticated LLM call
+    # to make the JSON results human-readable.
+    final_answer = json.dumps(state["results"], indent=2)
+    return {"final_answer": f"Query executed successfully. Results:\n{final_answer}"}
 class ToolResult(BaseModel):
     success: bool
     payload: Optional[Any]
@@ -48,10 +169,10 @@ def tool_fetch_similar_entities(inputs: Dict[str, Any]) -> list[ScoredPoint]:
     return fetch_similar_entities(labels, lang)
 
 
-@safe_tool
-def get_schema(entities: List[Any]):
-    schema = get_entities_schema(entities)
-    return format_schema_output(schema, entities)
+# @safe_tool
+# def get_schema(entities: List[Any]):
+#     schema = get_entities_schema(entities)
+#     return format_schema_output(schema, entities)
 
 
 @safe_tool
@@ -82,17 +203,19 @@ def tool_generate_sparql(inputs: Dict[str, Any]) -> Dict[str, Any]:
     examples = inputs["examples"]
     sim_entities = inputs["similar_entities"]
 
+    if not sim_entities:
+        raise ValueError("Cannot generate SPARQL query without any similar entities.")
+
     sparql_prompt = sparql_template(question, examples, sim_entities)
-    generated = get_json_response(
+    sparql = get_json_response(
         sparql_prompt,
         list_name="sparql",
         system_message="You are a SPARQL query generator."
     )
-    sparql = generated.get("sparql")
     if not sparql:
         raise ValueError("Missing 'sparql' in generation response")
 
-    is_valid, msg = validate_sparql(sparql)
+    is_valid, msg = validate_sparql(sparql["sparql"])
     if not is_valid:
         raise ValueError(f"Invalid SPARQL: {sparql} {msg}")
 
