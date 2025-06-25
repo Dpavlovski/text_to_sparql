@@ -1,46 +1,33 @@
-from langchain.output_parsers import ResponseSchema, StructuredOutputParser
+from typing import Dict, List
 
-from src.llm.generic_chat import generic_chat
+from pydantic import BaseModel, Field
 
+from src.llm.chat_with_ollama import chat_with_ollama
 
-def ner_template(question: str) -> str:
-    return f"""Your task is to extract all relevant keywords and phrases from the given question that could help in identifying Wikidata labels. This includes both proper names (e.g., organizations, persons, locations) and important common nouns and verbs that are essential to understanding the question. Also, identify the language of the question.
+ner_prompt = """Your task is to extract all relevant keywords and phrases from the given question that could help in identifying Wikidata entities. This includes both proper names (e.g., organizations, persons, locations) and important common nouns and verbs that are essential to understanding the question. Also, identify the language of the question.
 
-Question: {question}
+Question: 
+{question}
 
-Output Format:
-Return the extracted information in **valid JSON** format with the following structure:
-{{
-    "labels": [
-        <label1>,
-        <label2>,
-        ...
-    ],
-    "lang": "<language_code>"
-}}
+Format:
+- Format your response as a JSON object with the following keys:
+    - "lang": A string representing the language code of the question (e.g., "en", "es", "fr").
+    - "keywords": A list of JSON objects. Each object must have these two keys:
+        - "value": The extracted keyword or phrase as a string.
+        - "type": The type of the keyword. Must be one of the following strings:
+            - "item": For distinct entities like people, places, organizations, or concepts (e.g., "Leonardo da Vinci", "Paris", "Google", "Mona Lisa").
+            - "property": For attributes, relationships, or actions related to an item (e.g., "date of birth", "capital of", "invented", "painted").
+- If no relevant keywords are found, the "keywords" list should be an empty list [].
 """
 
 
-def extract_entities(question: str) -> dict:
-    base_prompt = ner_template(question)
+class NERResponse(BaseModel):
+    keywords: List[Dict[str, str]] = Field(description="Extracted keywords and phrases from the given question.")
+    lang: str = Field(description="The language code of the question.")
 
-    labels_field = ResponseSchema(
-        name="labels",
-        description="A list of all extracted entities, keywords and key phrases."
-    )
 
-    lang_field = ResponseSchema(
-        name="lang",
-        description="The language code of the question, e.g. 'en', 'es', 'fr', etc."
-    )
-
-    output_parser = StructuredOutputParser.from_response_schemas([labels_field, lang_field])
-
-    format_instructions = output_parser.get_format_instructions()
-    full_prompt = "\n\n".join([base_prompt, format_instructions])
-
-    raw_output = generic_chat(message=full_prompt)
-
-    parsed = output_parser.parse(raw_output)
-
-    return parsed
+def extract_entities(question: str) -> NERResponse:
+    formatted_prompt = ner_prompt.format(question=question)
+    structured_llm = chat_with_ollama().with_structured_output(NERResponse)
+    response: NERResponse = structured_llm.invoke(formatted_prompt)
+    return NERResponse(keywords=response.keywords, lang=response.lang)

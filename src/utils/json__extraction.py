@@ -3,7 +3,7 @@ from typing import Any, Dict
 
 from pydantic import BaseModel
 
-from src.llm.generic_chat import generic_chat
+from src.llm.generic_llm import generic_llm
 from src.utils.trim_and_load_json import trim_and_load_json
 
 
@@ -30,9 +30,9 @@ def get_json_response(
             logging.error("Exceeded maximum retry attempts for chat response.")
             raise Exception("Chat model failed to return a valid response.")
 
-        response = generic_chat(message=template, system_message=system_message)
+        llm = generic_llm()
 
-        is_finished, json_data = trim_and_load_json(input_string=response, list_name=list_name)
+        is_finished, json_data = trim_and_load_json(input_string=llm.invoke(template).content, list_name=list_name)
         tries += 1
 
     return json_data

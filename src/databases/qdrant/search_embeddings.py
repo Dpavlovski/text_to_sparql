@@ -1,4 +1,4 @@
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Dict
 
 from qdrant_client.http.models import ScoredPoint
 
@@ -26,9 +26,22 @@ def search_embeddings(
     )
 
 
-def fetch_similar_entities(labels: List[str], lang: str) -> List[Any]:
-    similar_entities: List[ScoredPoint] = []
-    for label in labels:
-        similar_entities.extend(search_wikidata(keyword=label, lang=lang))
-        similar_entities.extend(search_embeddings(value=label, lang=lang, collection_name="qald_10_labels"))
-    return similar_entities
+def fetch_similar_entities(keywords: List[Dict[str, str]], lang: str) -> Dict[str, Any]:
+    items: List[Any] = []
+    properties: List[Any] = []
+
+    for k in keywords:
+        keyword_type = k.get("type")
+        keyword_value = k.get("value")
+
+        if not keyword_value:
+            continue
+
+        search_results = search_wikidata(keyword=keyword_value, type=keyword_type, lang=lang)
+
+        if keyword_type == "item":
+            items.extend(search_results)
+        elif keyword_type == "property":
+            properties.extend(search_results)
+
+    return {"items": items, "properties": properties}

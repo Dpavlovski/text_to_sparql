@@ -19,11 +19,12 @@ def fetch_wikidata(params) -> str | Any:
         return f"An error occurred: {e}"
 
 
-def search_wikidata(keyword, lang="en"):
+def search_wikidata(keyword, type, lang="en"):
     results = []
     params = {
         "action": "wbsearchentities",
         "search": keyword,
+        "type": type,
         "language": lang,
         "format": "json",
         "limit": 5
