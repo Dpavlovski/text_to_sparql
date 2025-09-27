@@ -49,31 +49,31 @@ def embed_value(value: str) -> List[float]:
 
 
 BATCH_SIZE = 128
-COLLECTION_NAME = "wikidata_labels_en"
-VECTOR_SIZE = 384
 
 # Resume constants
-RESUME_FILE_NUM = 825  # File to resume from
-RESUME_LINE_NUM = 362  # Line to resume from
+RESUME_FILE_NUM = 0  # File to resume from
+RESUME_LINE_NUM = 0  # Line to resume from
 
 
 class Processor:
-    def __init__(self):
+    def __init__(self, collection_name: str, vector_size: int):
+        self.collection_name = collection_name
+        self.vector_size = vector_size
         self.db = QdrantDatabase()
         self.embedder = EmbeddingModel()
         self._init_collection()
 
     def _init_collection(self):
-        if not self.db.collection_exists(COLLECTION_NAME):
+        if not self.db.collection_exists(self.collection_name):
             self.db.create_collection(
-                COLLECTION_NAME,
-                vector_size=VECTOR_SIZE,
+                self.collection_name,
+                vector_size=self.vector_size,
                 distance=models.Distance.COSINE
             )
 
 
-def process_file(file_pair: Tuple[Path, Path], lang: str = "en"):
-    processor = Processor()
+def process_file(file_pair: Tuple[Path, Path], collection_name: str, vector_size: int, lang: str = "en"):
+    processor = Processor(collection_name, vector_size)
     label_file, desc_file = file_pair
     file_num = int(label_file.stem)
 
@@ -130,7 +130,7 @@ def process_file(file_pair: Tuple[Path, Path], lang: str = "en"):
         return False
 
 
-def process_batch(processor, records, lang):
+def process_batch(processor: Processor, records, lang):
     texts = [item[0] for item in records]
     qids = [item[1] for item in records]
 
@@ -144,37 +144,37 @@ def process_batch(processor, records, lang):
     ]
 
     processor.db.client.upsert(
-        collection_name=COLLECTION_NAME,
+        collection_name=processor.collection_name,
         points=points,
         wait=True
     )
 
 
-def process_all_files(file_pairs: List[Tuple[Path, Path]]):
-    # Process files in order
+def process_all_files(file_pairs: List[Tuple[Path, Path]], collection_name: str, vector_size: int):
     for pair in sorted(file_pairs, key=lambda x: int(x[0].stem)):
         file_num = int(pair[0].stem)
 
-        # Skip files before resume point
         if file_num < RESUME_FILE_NUM:
             continue
 
-        success = process_file(pair, "en")
+        success = process_file(pair, collection_name, vector_size, lang="en")
         if not success:
             print(f"Aborting processing due to failure in file {file_num}")
             break
 
-
-if __name__ == "__main__":
-    labels_dir = Path("data_processed/labels")
-    descriptions_dir = Path("data_processed/descriptions")
-
-    file_pairs = [
-        (labels_dir / f"{i}.jsonl", descriptions_dir / f"{i}.jsonl")
-        for i in range(2304)
-        if (labels_dir / f"{i}.jsonl").exists()
-           and (descriptions_dir / f"{i}.jsonl").exists()
-    ]
-
-    print(f"Found {len(file_pairs)} files to process")
-    process_all_files(file_pairs)
+# if __name__ == "__main__":
+#     COLLECTION_NAME = "wikidata_labels_en"  # Change here if needed
+#     VECTOR_SIZE = 384  # Change here if needed
+#
+#     labels_dir = Path("data_processed/labels")
+#     descriptions_dir = Path("data_processed/descriptions")
+#
+#     file_pairs = [
+#         (labels_dir / f"{i}.jsonl", descriptions_dir / f"{i}.jsonl")
+#         for i in range(2304)
+#         if (labels_dir / f"{i}.jsonl").exists()
+#            and (descriptions_dir / f"{i}.jsonl").exists()
+#     ]
+#
+#     print(f"Found {len(file_pairs)} files to process")
+#     process_all_files(file_pairs, COLLECTION_NAME, VECTOR_SIZE)

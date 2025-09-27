@@ -10,6 +10,7 @@ def chat_with_openai(
 
     return ChatOpenAI(
         model=os.getenv("OPENAI_MODEL"),
-        base_url=os.getenv("OPENAI_API_KEY"),
         temperature=0,
     )
+
+# print(chat_with_openai().invoke("Hello"))

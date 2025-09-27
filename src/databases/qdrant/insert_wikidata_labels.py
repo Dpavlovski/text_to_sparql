@@ -7,7 +7,7 @@ from tqdm import tqdm
 from src.databases.qdrant.qdrant import QdrantDatabase
 from src.dataset.qald_10_results_embedings import extract_qald_query_ids
 from src.utils.format_uri import extract_id_from_uri
-from src.wikidata.api import fetch_wikidata_labels
+from src.wikidata.api import get_wikidata_labels
 
 
 def embedd_labels():
@@ -20,7 +20,7 @@ def embedd_labels():
 
     logging.info(f"Results loaded with {len(ids)} records.")
 
-    labels_map = fetch_wikidata_labels(entity_ids)
+    labels_map = get_wikidata_labels(entity_ids)
     logging.info("Labels fetched.")
 
     for entity_id, labels in tqdm(labels_map.items(), desc="Embedding and upserting records"):

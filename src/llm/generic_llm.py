@@ -2,7 +2,6 @@ import os
 from enum import Enum
 
 from dotenv import load_dotenv
-from langchain_core.language_models import BaseChatModel
 
 from src.llm.chat_with_ollama import chat_with_ollama
 from src.llm.gpt_chat import chat_with_openai
@@ -14,7 +13,7 @@ class ChatModel(Enum):
     HF = "hf"
 
 
-def generic_llm() -> BaseChatModel:
+def generic_llm():
     load_dotenv()
     chat_model = os.getenv("CHAT_MODEL")
 

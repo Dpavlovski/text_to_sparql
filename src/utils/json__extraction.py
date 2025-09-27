@@ -1,38 +1,40 @@
 import logging
 from typing import Any, Dict
 
-from pydantic import BaseModel
-
 from src.llm.generic_llm import generic_llm
 from src.utils.trim_and_load_json import trim_and_load_json
 
 
-class ChatResponse(BaseModel):
-    message: str
-    response: str
-    llm_model: str
-
-
-def get_json_response(
+async def get_json_response(
         template: str,
-        list_name: str = "",
-        system_message: str = "You are a helpful AI assistant."
+        list_name: str = ""
 ) -> Dict[str, Any]:
-    is_finished = False
-    json_data = {}
-    tries = 0
+    llm = generic_llm()
+    full_response_content = ""
 
-    while not is_finished:
-        if tries > 0:
-            logging.warning(f"Chat not returning as expected. Attempt: {tries}")
+    try:
+        # This is where the call to the Ollama model happens.
+        # We'll wrap it in a try...except block.
+        async for chunk in llm.astream(template):
+            full_response_content += chunk.content
 
-        if tries > 3:
-            logging.error("Exceeded maximum retry attempts for chat response.")
-            raise Exception("Chat model failed to return a valid response.")
+    except Exception as e:
+        # If an error occurs during the Ollama call, this block will execute.
+        print("=" * 80)
+        print(f"ERROR: An exception occurred while calling the Ollama language model.")
+        print(f"       This is the likely source of the timeout or connection error.")
+        print(f"       Error details: {e}")
+        print("=" * 80)
+        # Return an empty dictionary to handle the error gracefully
+        return {}
 
-        llm = generic_llm()
+    is_finished, json_data = trim_and_load_json(
+        input_string=full_response_content,
+        list_name=list_name
+    )
 
-        is_finished, json_data = trim_and_load_json(input_string=llm.invoke(template).content, list_name=list_name)
-        tries += 1
+    if not is_finished:
+        logging.warning("Failed to parse a valid JSON from the streamed response.")
+        return {}
 
     return json_data

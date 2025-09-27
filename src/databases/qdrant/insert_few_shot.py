@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import uuid
 
@@ -7,7 +8,7 @@ from src.databases.qdrant.qdrant import QdrantDatabase
 from src.dataset.lcquad2_0 import get_dataset
 
 
-def embedd_dataset():
+async def embedd_dataset():
     logging.basicConfig(level=logging.INFO)
     logging.info("Starting the embedding process...")
 
@@ -24,7 +25,7 @@ def embedd_dataset():
             continue
 
         try:
-            qdb.embedd_and_upsert_record(
+            await qdb.embedd_and_upsert_record(
                 value=question,
                 collection_name="lcquad2_0",
                 unique_id=str(uuid.uuid4()),
@@ -34,3 +35,7 @@ def embedd_dataset():
             logging.error(f"Error processing record with question: {question}. Error: {e}")
 
     logging.info("Embedding process completed successfully.")
+
+
+if __name__ == "__main__":
+    asyncio.run(embedd_dataset())

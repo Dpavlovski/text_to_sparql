@@ -3,8 +3,7 @@ from typing import Any
 
 
 def load_qald_json() -> list[dict[str, Any]]:
-    with open("C:\\Users\\User\\PycharmProjects\\text_to_sparql\\src\\dataset\\qald_10.json", "r",
-              encoding="utf-8") as f:
+    with open("../qald_10_with_mk.json", "r", encoding="utf-8") as f:
         data = json.load(f)
 
     questions = data.get("questions", [])
@@ -37,3 +36,5 @@ def load_qald_json() -> list[dict[str, Any]]:
         rows.append(row)
 
     return rows
+
+# print(load_qald_json())

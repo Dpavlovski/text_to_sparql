@@ -2,7 +2,7 @@
 name = "text-to-sparql"
 version = "0.1.0"
 description = ""
-authors = ["Dimitar Pavlovski dimitar.pavlovski12@gmail.com"]
+authors = ["Dimitar Pavlovski <dimitar.pavlovski12@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
@@ -20,7 +20,7 @@ pymongo = "^4.12.1"
 scikit-learn = "^1.6.1"
 matplotlib = "^3.10.1"
 pywikibot = "^10.0.0"
-transformers = "==4.51.3"
+transformers = "4.52.1"
 torch = "^2.7.0"
 wikidata = "==0.8.1"
 ujson = "^5.10.0"
@@ -31,6 +31,12 @@ beautifulsoup4 = "^4.13.4"
 bs4 = "^0.0.2"
 langgraph = "^0.4.7"
 ipython = "^9.3.0"
+qwikidata = "^0.4.2"
+deep-translator = "^1.11.4"
+notebook = "^7.4.5"
+sentence-transformers = "^5.1.1"
+sentencepiece = "^0.2.1"
+sacremoses = "^0.1.1"
 
 
 [build-system]

@@ -4,13 +4,20 @@ from qdrant_client.http.models import ScoredPoint
 
 
 def format_examples(examples: List[ScoredPoint]) -> str:
+    if not examples:
+        return ''
+        
     template = ''
     for ex in examples:
-        template += f"""
+        try:
+            template += f"""
         Question:
-            {ex.payload['value']}
+            {ex.payload.get('value', 'No value available')}
         Output:
-            {ex.payload['answer']}
+            {ex.payload.get('answer', 'No answer available')}
         """
+        except (AttributeError, KeyError, TypeError) as e:
+            # Skip examples with missing or invalid payload
+            continue
 
     return template

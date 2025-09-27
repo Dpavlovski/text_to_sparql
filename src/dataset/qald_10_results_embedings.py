@@ -4,7 +4,7 @@ from typing import List, Optional
 
 
 def extract_qald_query_ids() -> Optional[List[str]]:
-    file_path = r"C:\Users\User\PycharmProjects\text_to_sparql\src\dataset\qald_10.json"
+    file_path = r"/qald_10.json"
 
     try:
         with open(file_path, "r", encoding="utf-8") as f:
