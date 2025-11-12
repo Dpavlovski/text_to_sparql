@@ -8,7 +8,7 @@ import torch
 from qdrant_client import models
 from transformers import AutoTokenizer, AutoModel
 
-from src.databases.qdrant.qdrant import QdrantDatabase
+from src.databases.qdrant.qdrant import qdrant_db
 
 
 class EmbeddingModel:
@@ -59,7 +59,7 @@ class Processor:
     def __init__(self, collection_name: str, vector_size: int):
         self.collection_name = collection_name
         self.vector_size = vector_size
-        self.db = QdrantDatabase()
+        self.db = qdrant_db
         self.embedder = EmbeddingModel()
         self._init_collection()
 

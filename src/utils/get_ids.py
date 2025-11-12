@@ -61,7 +61,7 @@ def extract_ids_from_sparql(json_file_path, csv_file_path):
         print(f"An unexpected error occurred: {e}")
 
 
-json_filename = '../../qald_10.json'
+json_filename = '../../qald_10_with_mk.json'
 csv_filename = 'extracted_sparql_ids.csv'
 
 extract_ids_from_sparql(json_filename, csv_filename)

@@ -15,12 +15,12 @@ from src.http_client.session import close_session
 CSV_HEADER = [
     "original_question",
     "rephrased_question",
-    "ner_response",
-    "similar_entities",
+    "ner",
+    "candidates",
     "examples",
-    "sparql",
-    "results",
-    "time_of_execution"
+    "generated_query",
+    "result",
+    "time"
 ]
 
 
@@ -49,20 +49,19 @@ async def process_question_and_write_attempts(
                 new_logs = state.get("log_data", [])
 
                 for log_entry in new_logs:
-                    if log_entry:  # Ensure the log is not empty
+                    if log_entry:
                         # Create a row based on the header
                         row = [log_entry.get(h, "") for h in CSV_HEADER]
                         csv_writer.writerow(row)
 
     except Exception as e:
         print(f"\nCaught a streaming error for question '{question}': {e}")
-        # Log a final error row if the stream itself fails
         error_row = {"original_question": question, "results": f"STREAMING FAILED: {e}"}
         csv_writer.writerow([error_row.get(h, "") for h in CSV_HEADER])
 
 
 async def main():
-    csv_file_name = '../results/benchmark/sparql_outputs_v5.csv'
+    csv_file_name = '../results/benchmark/sparql_outputs_improved_linking.csv'
     file_exists = os.path.exists(csv_file_name)
 
     with open(csv_file_name, 'a', newline='', encoding='utf-8') as f:

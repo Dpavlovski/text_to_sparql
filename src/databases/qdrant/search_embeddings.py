@@ -1,77 +1,71 @@
 import asyncio
-from typing import List, Optional, Any, Dict
-
-from qdrant_client.http.models import ScoredPoint
+from typing import List, Any, Dict
 
 from src.databases.qdrant.qdrant import qdrant_db
+from src.llm.embed_labels import embed_value
+from src.utils.format_candidates import format_candidates
+from src.utils.format_examples import format_qa_sparql_examples
 from src.wikidata.api import search_wikidata
 
 
-async def search_embeddings(
-        value: str,
-        collection_name: str,
-        lang: Optional[str] = None
-) -> List[ScoredPoint]:
-    search_filter = {"lang": lang} if lang else None
-    return await qdrant_db.search_embeddings_str(
-        query=value,
-        filter=search_filter,
+async def fetch_similar_qa_pairs(question: str):
+    """Fetches similar question-answer pairs to use as few-shot examples."""
+    vector = embed_value(question)
+    examples = await qdrant_db.search_embeddings(
+        vector=vector,
         score_threshold=0.2,
         top_k=5,
-        collection_name=collection_name
+        collection_name="lcquad2_0"
     )
+    return format_qa_sparql_examples(examples)
 
 
-async def fetch_similar_entities(keywords: List[Any], lang: str) -> Dict[str, Any]:
-    items: List[Any] = []
-    properties: List[Any] = []
+async def get_candidates(
+        keywords: List[Any],
+        lang: str
+) -> Any:
+    """
+    Fetches, combines, and deduplicates entity candidates for a list of keywords.
 
+    This version PRESERVES THE MAPPING between each keyword and its candidates.
+    """
+    # Filter for valid keywords to avoid errors and unnecessary API calls
     valid_keywords = [k for k in keywords if k.value]
+    if not valid_keywords:
+        return {}
 
-    # --- Step 1: Create all concurrent tasks ---
+    query_vectors = [embed_value(k.value) for k in valid_keywords]
 
-    # Create a list of tasks for embedding searches
-    embedding_tasks = [
-        # search_embeddings(
-        #     k.value,
-        #     collection_name="wikidata_labels_en",
-        #     lang=lang
-        # ) for k in valid_keywords
-    ]
-
-    # Create a list of tasks for Wikidata API searches
-    wikidata_tasks = [
-        search_wikidata(
-            keyword=k.value,
-            type=k.type,
-            lang=lang
-        ) for k in valid_keywords
-    ]
-
-    # --- Step 2: Run all tasks concurrently ---
-
-    # Run all tasks and wait for all of them to complete.
-    # The `*` unpacks the lists into individual arguments for gather.
-    results = await asyncio.gather(
-        *embedding_tasks,
-        *wikidata_tasks
+    qdrant_batch_task = qdrant_db.search_embeddings_batch(
+        vectors=query_vectors,
+        collection_name="qald_10_labels",
+        score_threshold=0.7,
+        top_k=5,
+        filter={"lang": lang}
     )
 
-    # --- Step 3: Process the results ---
+    wikidata_tasks = [
+        search_wikidata(keyword=k.value, type=k.type, lang=lang)
+        for k in valid_keywords
+    ]
 
-    # The first N results belong to the embedding tasks
-    embedding_results = results[:len(embedding_tasks)]
-    final_embeddings = [emb for result in embedding_results for emb in result]
+    all_results = await asyncio.gather(qdrant_batch_task, *wikidata_tasks)
 
-    # The remaining results belong to the wikidata tasks
-    wikidata_results = results[len(embedding_tasks):]
+    qdrant_results_per_keyword = all_results[0]
+    wikidata_results_per_keyword = all_results[1:]
 
-    for i, k in enumerate(valid_keywords):
-        search_results = wikidata_results[i]
-        if search_results:
-            if k.type == "item":
-                items.extend(search_results)
-            elif k.type == "property":
-                properties.extend(search_results)
+    candidates_map: Dict[str, List[Dict[str, Any]]] = {}
 
-    return {"items": items, "properties": properties, "embeddings": final_embeddings}
+    for i, keyword in enumerate(valid_keywords):
+        qdrant_candidates_for_keyword = qdrant_results_per_keyword[i] if i < len(qdrant_results_per_keyword) else []
+        wikidata_candidates_for_keyword = wikidata_results_per_keyword[i] if i < len(
+            wikidata_results_per_keyword) else []
+
+        combined_list = format_candidates(
+            qdrant_candidates_for_keyword,
+            wikidata_candidates_for_keyword
+        )
+
+        candidates_map[keyword.value] = combined_list
+
+    return candidates_map

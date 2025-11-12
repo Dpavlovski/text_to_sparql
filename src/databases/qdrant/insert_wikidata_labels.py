@@ -4,17 +4,17 @@ from typing import List
 
 from tqdm import tqdm
 
-from src.databases.qdrant.qdrant import QdrantDatabase
+from src.databases.qdrant.qdrant import qdrant_db
 from src.dataset.qald_10_results_embedings import extract_qald_query_ids
+from src.llm.embed_labels import embed_value
 from src.utils.format_uri import extract_id_from_uri
 from src.wikidata.api import get_wikidata_labels
 
 
-def embedd_labels():
+async def embedd_labels():
     logging.basicConfig(level=logging.INFO)
     logging.info("Starting the embedding process...")
 
-    qdb = QdrantDatabase()
     ids = extract_qald_query_ids()
     entity_ids: List[str] = [extract_id_from_uri(uri) for uri in ids]
 
@@ -31,12 +31,14 @@ def embedd_labels():
                 embedding_value = label["label"]
 
             try:
-                qdb.embedd_and_upsert_record(
-                    value=embedding_value,
+                vector = embed_value(embedding_value)
+                await qdrant_db.upsert_record(
+                    vector=vector,
                     collection_name="qald_10_labels",
                     unique_id=str(uuid.uuid4()),
-                    metadata={"id": entity_id, "lang": label['language']}
+                    payload={"id": entity_id, "lang": label['language']}
                 )
+
             except Exception as e:
                 logging.error(f"Error processing label '{label}' for {entity_id}. Error: {e}")
 

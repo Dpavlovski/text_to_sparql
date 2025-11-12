@@ -94,4 +94,4 @@ def transform_entry(idx: int, row: dict, null_values: set):
 
 
 if __name__ == '__main__':
-    gerbil_eval('../benchmark/sparql_outputs_with_analysis.csv', '../gerbil/agentv5.json')
+    gerbil_eval('../benchmark/sparql_outputs_mk.csv', '../gerbil/mk_results.json')

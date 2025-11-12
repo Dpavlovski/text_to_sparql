@@ -1,22 +1,12 @@
 import os
-import uuid
-from typing import List, Dict, Any, Optional, TypeVar
+from typing import List, Dict, Any, Optional
 
 from dotenv import load_dotenv
-from pydantic import BaseModel
 from qdrant_client import AsyncQdrantClient, models
 from qdrant_client.conversions import common_types as types
-from qdrant_client.http.models import Record
+from qdrant_client.http.models import QueryResponse, Record, ScoredPoint
 
 load_dotenv()
-
-
-class SearchOutput(BaseModel):
-    score: float
-    value_type: str
-
-
-T = TypeVar('T')
 
 
 class QdrantDatabase:
@@ -59,24 +49,6 @@ class QdrantDatabase:
                 return
             raise RuntimeError(f"Failed to create/verify collection {collection_name}: {str(e)}")
 
-    async def embedd_and_upsert_record(
-            self,
-            value: str,
-            collection_name: str,
-            unique_id: str = None,
-            metadata: Optional[Dict[str, Any]] = None
-    ) -> None:
-
-        metadata = {} if metadata is None else metadata
-        metadata["value"] = value
-
-        from src.llm.embed_labels import embed_value
-
-        vector = embed_value(value)
-        record_id = str(uuid.uuid4()) if unique_id is None else unique_id
-
-        await self.upsert_record(record_id, collection_name, metadata, vector)
-
     async def delete_all_collections(self):
         collections = await self.client.get_collections()
         for collection in collections.collections:
@@ -97,43 +69,49 @@ class QdrantDatabase:
         )
         return points[0]
 
-    async def search_embeddings(
-            self,
-            query_vector: List[float],
-            collection_name: str,
-            score_threshold: float,
-            top_k: int,
-            filter: Optional[Dict[str, Any]] = None
-    ) -> List[types.ScoredPoint]:
-        field_condition = QdrantDatabase._generate_filter(filter=filter)
+    async def search_embeddings(self,
+                                vector: List[float],
+                                collection_name: str,
+                                score_threshold: float,
+                                top_k: int,
+                                filter: Optional[Dict[str, Any]] = None) -> List[ScoredPoint]:
 
-        return await self.client.search(
-            query_vector=query_vector,
+        field_condition = QdrantDatabase._generate_filter(filter=filter)
+        query_response = await self.client.query_points(
+            query=vector,
             score_threshold=score_threshold,
             collection_name=collection_name,
             limit=top_k,
             query_filter=field_condition
         )
+        return query_response.points
 
-    async def search_embeddings_str(
+    async def search_embeddings_batch(
             self,
-            query: str,
+            vectors: List[Any],
             collection_name: str,
             score_threshold: float,
             top_k: int,
             filter: Optional[Dict[str, Any]] = None
-    ) -> List[types.ScoredPoint]:
+    ) -> List[QueryResponse]:
+        field_condition = QdrantDatabase._generate_filter(filter=filter)
 
-        if collection_name == "lcquad2_0":
-            from src.llm.embed_examples import embed_examples
-            query_vector = embed_examples(query)
-        else:
-            from src.llm.embed_labels import embed_value
-            query_vector = embed_value(query)
+        search_requests = []
+        for vector in vectors:
+            search_requests.append(
+                models.QueryRequest(
+                    query=vector,
+                    limit=top_k,
+                    filter=field_condition,
+                    score_threshold=score_threshold,
+                    with_payload=True,
+                )
+            )
 
-        return await self.search_embeddings(collection_name=collection_name, score_threshold=score_threshold,
-                                            top_k=top_k,
-                                            query_vector=query_vector, filter=filter)
+        return await self.client.query_batch_points(
+            collection_name=collection_name,
+            requests=search_requests
+        )
 
     async def get_all_points(
             self,

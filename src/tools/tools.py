@@ -5,11 +5,10 @@ from langchain_core.tools import tool
 from pydantic import Field
 
 from src.agent.prompts import validation_prompt
-from src.databases.qdrant.search_embeddings import fetch_similar_entities, search_embeddings
+from src.databases.qdrant.search_embeddings import fetch_similar_qa_pairs, get_candidates
 from src.llm.generic_llm import generic_llm
 from src.tools.ner import extract_entities
-from src.tools.sparql import get_sparql_query
-from src.utils.format_examples import format_examples
+from src.tools.sparql import get_sparql_query, disambiguate_entities
 
 
 @tool("generate_sparql_query")
@@ -34,20 +33,23 @@ async def generate_sparql(
     ner_response = await extract_entities(question)
 
     # 2. Find similar entities to augment search
-    sim_entities = await fetch_similar_entities(ner_response.keywords, ner_response.lang)
+    candidates_map = await get_candidates(ner_response.keywords, ner_response.lang)
 
-    # 3. Retrieve examples to guide the LLM
-    examples = await search_embeddings(question, collection_name="lcquad2_0")
-    formatted_examples = format_examples(examples)
+    # 3. Disambiguate and get confirmed entities
+    linked_entities = await disambiguate_entities(question, candidates_map)
 
-    # 4. Generate the SPARQL query
-    response = await get_sparql_query(question, formatted_examples, sim_entities)
+    # 4. Retrieve examples to guide the LLM
+    examples = await fetch_similar_qa_pairs(question)
 
-    # 5. Log the process for analysis
+    # 5. Generate the SPARQL query
+    response = await get_sparql_query(question, examples, linked_entities)
+
+    # 6. Log the process for analysis
     results = None
     if response.get('results') is not None:
         if isinstance(response.get('results'), bool):
             results = str(response.get('results'))
+
         else:
             results = "\n".join(str(r.get("value", "")) for r in response.get('results', []))
 
@@ -56,12 +58,12 @@ async def generate_sparql(
     log_data = {
         "original_question": original_question,
         "rephrased_question": question,
-        "ner_response": str(ner_response),
-        "similar_entities": str(sim_entities),
+        "ner": str(ner_response),
+        "candidates": str(linked_entities),
         "examples": str(examples),
-        "sparql_query": str(response.get("sparql")),
-        "results": results,
-        "time_of_execution": f"{execution_time:.2f}"
+        "generated_query": str(response.get("sparql")),
+        "result": results,
+        "time": f"{execution_time:.2f}"
     }
 
     response['log_data'] = log_data

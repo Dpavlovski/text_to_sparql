@@ -1,8 +1,8 @@
 # import pandas as pd
 #
 # # Load the datasets
-# df_sparql = pd.read_csv('../benchmark/sparql_outputs_v3.csv')
-# df_ids = pd.read_csv('ground_truth_ids.csv')
+# df_sparql = pd.read_csv('../../results/benchmark/sparql_outputs_mk.csv')
+# df_ids = pd.read_csv('../../ground_truth_ids.csv')
 #
 # # Get the unique questions from the sparql_outputs_v3.csv file in order of appearance
 # unique_questions = df_sparql['original_question'].unique()
@@ -14,7 +14,7 @@
 # df_sparql['Combined_IDs'] = df_sparql['original_question'].map(question_to_id_map)
 #
 # # Save the updated dataframe to a new CSV file
-# df_sparql.to_csv('sparql_outputs_with_ids.csv', index=False)
+# df_sparql.to_csv('../../results/benchmark/sparql_outputs_mk_2.csv', index=False)
 #
 # print("IDs have been successfully inserted into the 'sparql_outputs_with_ids.csv' file.")
 
@@ -46,7 +46,7 @@ def create_analysis_file(input_path, output_path):
     def extract_wikidata_ids(candidates_str):
         """Extracts Wikidata IDs, handling both 'id' and 'qid' keys."""
         try:
-            return re.findall(r"'(?:id|qid)': '(Q\d+)'", str(candidates_str))
+            return re.findall(r"'(?:id|qid)': '(Q\d+|P\d+)'", str(candidates_str))
         except:
             return []
 
@@ -112,8 +112,8 @@ def create_analysis_file(input_path, output_path):
 
 if __name__ == '__main__':
     # Define the input and output file paths
-    input_csv = '../benchmark/sparql_outputs_with_ids.csv'
-    output_csv = 'sparql_outputs_with_analysis.csv'
+    input_csv = '../../results/benchmark/sparql_outputs_with_analysis.csv'
+    output_csv = '../../results/benchmark/sparql_outputs_with_analysis_2.csv'
 
     # Run the function to create the new analysis file
     create_analysis_file(input_csv, output_csv)

@@ -10,7 +10,6 @@ from src.llm.gpt_chat import chat_with_openai
 class ChatModel(Enum):
     OPENAI = "openai"
     OLLAMA = "ollama"
-    HF = "hf"
 
 
 def generic_llm():
@@ -21,7 +20,5 @@ def generic_llm():
         return chat_with_openai()
     elif chat_model == ChatModel.OLLAMA.value:
         return chat_with_ollama()
-    # elif chat_model == ChatModel.HF.value:
-    #     return chat_with_hf_inference(message, system_message)
     else:
         raise ValueError("CHAT_MODEL environment variable is not set or has an invalid value.")

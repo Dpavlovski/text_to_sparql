@@ -17,8 +17,6 @@ User task:
 {user_task}
 """
 
-# In src/agent/prompts.py
-
 failure_no_results_message = """
 The previous SPARQL query for the user task "{user_task}" returned no results.
 
@@ -44,7 +42,7 @@ SPARQL Query Results:
 Does the result answer the question? Please respond with "yes" or "no".
 """
 
-ner_prompt = """Your task is to extract all relevant keywords and phrases from the given question that could help in identifying Wikidata entities. This includes both proper names (e.g., organizations, persons, locations) and important common nouns and verbs that are essential to understanding the question. Also, identify the language of the question.
+ner_prompt = """Your task is to extract all relevant keywords and phrases from the given question that could help in identifying Wikidata entities and properties. You must also identify the language of the question. The question can be in any language.
 
 Question: 
 {question}
@@ -60,27 +58,37 @@ Format:
 - If no relevant keywords are found, the "keywords" list should be an empty list [].
 """
 
-sparql_prompt_template = """You are an AI designed to generate precise SPARQL queries for retrieving information from the Wikidata knowledge graph. 
+sparql_prompt_template = """You are a highly specialized AI that converts natural language questions into precise SPARQL queries for Wikidata.
 
-Your task:
-- Use only the provided entities to construct the query.
-- Do not include prefixes or services.
-- Use only "wd" or "wdt" as prefixes for entities.
-- Determine whether a "SELECT" or "ASK" query is more appropriate.
-- Return only the SPARQL query in JSON format with the key 'sparql', without any additional text.
+**Your Instructions:**
 
-{formatted_examples}
+1.  **Analyze the User's Question**.
+2.  **Use Provided Confirmed Entities**: You have been given the exact entities to use for the query. You MUST use these IDs. Do not search for other entities.
+3.  **Strict SPARQL Syntax**: Use `wd:` for items and `wdt:` for properties.
+4.  **Strict Output Format**: Your final output must be a single JSON object with only the "sparql" key.
 
-Question: {question}
+{examples}
 
-{entity_descriptions}
+**User's Question:** {question}
 
-{relations_descriptions}
+**Confirmed Entities for Query Construction:**
+{linked_entities_context}
 
-{embeddings}
-
-Output format (JSON):
+**Required Output (JSON only):**
 {{
-  "sparql": "<SPARQL_QUERY_HERE>"
+  "sparql": "YOUR_SPARQL_QUERY_GOES_HERE"
 }}
+"""
+
+disambiguation_prompt_template = """You are an expert entity disambiguation AI. Your task is to select the single correct entity for each mention from a list of candidates, based on the user's question.
+
+Analyze the user's question to understand its context. Then, for each mention, review its list of candidates. Choose the candidate whose description best fits the context.
+
+User Question: "{question}"
+
+**Candidates:**
+{formatted_candidates}
+
+Your response MUST be a JSON object that maps each mention to its single, correct entity ID.
+Example response: {{"Paris": "wd:Q90", "France": "wd:Q142"}}
 """

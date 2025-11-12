@@ -19,24 +19,24 @@ llm_with_tools = llm.bind_tools(tools)
 def llm_node(state: AgentState) -> dict[str, list[BaseMessage]]:
     """Invokes the LLM to decide on the next action or to generate a final response."""
     try:
-        # We are wrapping the call to the LLM in a try...except block
         response = llm_with_tools.invoke(
             [
                 SystemMessage(
-                    content="You are an expert at converting user questions into SPARQL queries to answer them."
+                    content="You are an expert at converting user questions into SPARQL queries. "
+                            "Your primary task is to use the provided tools to answer the user's question. "
+                            "**IMPORTANT**: Always use the user's original, untranslated question in the 'question' argument for the tool. Do not modify or translate it."
                 )
+
             ]
             + state["messages"]
         )
         return {"messages": [response]}
 
     except Exception as e:
-        # If an error occurs during the Ollama call, this block will execute.
         print("=" * 80)
-        print(f"ERROR: An exception occurred in the llm_node, likely during the call to the Ollama model.")
+        print(f"ERROR: An exception occurred in the llm_node, likely during the call to the llm.")
         print(f"       Error details: {e}")
         print("=" * 80)
-        # Return a ToolMessage with the error to the graph
         error_message = f"LLM call failed: {e}"
         return {"messages": [ToolMessage(content=error_message, tool_call_id="llm_error")]}
 
