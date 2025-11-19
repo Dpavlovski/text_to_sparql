@@ -1,0 +1,6 @@
+question,gold_keywords
+Which animal participated in a military operation with the Australian Defence Force?,"keywords=[Keyword(value='animal', type='item'), Keyword(value='military operation', type='item'), Keyword(value='Australian Defence Force', type='item'), Keyword(value='participant in', type='property')] lang='en'"
+"among the founders of tencent company, who has been member of national people's congress?","keywords=[Keyword(value='Tencent', type='item'), Keyword(value='founder', type='property'), Keyword(value='National People's Congress', type='item'), Keyword(value='member of', type='property')] lang='en'"
+"among the characters in the witcher, who has two unmarried partners, Yennefer of Vengerberg and Triss Merigold?","keywords=[Keyword(value='The Witcher', type='item'), Keyword(value='Yennefer of Vengerberg', type='item'), Keyword(value='Triss Merigold', type='item'), Keyword(value='unmarried partner', type='property')] lang='en'"
+At which school was Yayoi Kusama educated at?,"keywords=[Keyword(value='Yayoi Kusama', type='item'), Keyword(value='educated at', type='property'), Keyword(value='school', type='item')] lang='en'"
+On which stock exchanges are Siemens AG shares traded?,"keywords=[Keyword(value='Siemens AG', type='item'), Keyword(value='stock exchange', type='item'), Keyword(value='listed on', type='property')] lang='en'"

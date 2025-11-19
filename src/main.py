@@ -17,6 +17,7 @@ CSV_HEADER = [
     "rephrased_question",
     "ner",
     "candidates",
+    "schema_context",
     "examples",
     "generated_query",
     "result",
@@ -61,7 +62,7 @@ async def process_question_and_write_attempts(
 
 
 async def main():
-    csv_file_name = '../results/benchmark/sparql_outputs_improved_linking.csv'
+    csv_file_name = '../results/benchmark/sparql_outputs_mk_v2.csv'
     file_exists = os.path.exists(csv_file_name)
 
     with open(csv_file_name, 'a', newline='', encoding='utf-8') as f:

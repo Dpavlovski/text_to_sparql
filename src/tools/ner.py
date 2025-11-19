@@ -3,7 +3,7 @@ from typing import List, Literal
 from pydantic import BaseModel, Field
 
 from src.agent.prompts import ner_prompt
-from src.llm.generic_llm import generic_llm
+from src.llm.llm_provider import llm_provider
 
 
 class Keyword(BaseModel):
@@ -18,6 +18,6 @@ class NERResponse(BaseModel):
 
 async def extract_entities(question: str) -> NERResponse:
     formatted_prompt = ner_prompt.format(question=question)
-    structured_llm = generic_llm().with_structured_output(NERResponse)
+    structured_llm = llm_provider.get_model("kwaipilot/kat-coder-pro:free").with_structured_output(NERResponse)
     response = await structured_llm.ainvoke(formatted_prompt)
     return response

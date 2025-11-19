@@ -1,9 +1,10 @@
+import json
 from typing import List, Any, Dict
 
 from rdflib.plugins.sparql import prepareQuery
 
 from src.agent.prompts import sparql_prompt_template, disambiguation_prompt_template
-from src.utils.json__extraction import get_json_response
+from src.llm.llm_provider import llm_provider
 from src.wikidata.api import execute_sparql_query
 from src.wikidata.prefixes import PREFIXES
 
@@ -47,7 +48,7 @@ async def disambiguate_entities(
         formatted_candidates=formatted_candidates
     )
 
-    linked_entities = await get_json_response(prompt)
+    linked_entities = await llm_provider.get_model("gpt-4.1-mini").ainvoke(prompt)
 
     if not isinstance(linked_entities, dict):
         raise ValueError("Disambiguation response was not a valid dictionary.")
@@ -67,18 +68,23 @@ def validate_sparql(query: str):
 async def get_sparql_query(
         question: str,
         examples: str,
-        linked_entities: Any
+        candidates_map: Any,
+        schema_context: Any
 ) -> Dict[str, Any]:
-    linked_entities_context = format_linked_entities_for_prompt(linked_entities)
-
+    # linked_entities_context = format_linked_entities_for_prompt(linked_entities)
+    # candidates = format_linked_entities_for_prompt(candidates_map)
     sparql_prompt = sparql_prompt_template.format(
         examples=examples,
         question=question,
-        linked_entities_context=linked_entities_context
+        candidates=candidates_map,
+        schema_context=schema_context
     )
+    llm = llm_provider.get_model("gpt-4.1-mini")
+    llm.with_structured_output(method="json_mode")
+    ai_message_result = await llm.ainvoke(sparql_prompt)
 
-    sparql_json = await get_json_response(sparql_prompt)
-
+    sparql_json_string = ai_message_result.content
+    sparql_json = json.loads(sparql_json_string)
     if not sparql_json or "sparql" not in sparql_json:
         raise ValueError("Missing 'sparql' in generation response")
 

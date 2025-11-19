@@ -10,7 +10,7 @@ def load_qald_json() -> list[dict[str, Any]]:
 
     rows = []
     for question in questions:
-        q = question['question'][0]['string']
+        q = question['question'][-1]['string']
         ground_truth_sparql = question['query']['sparql']
 
         if 'boolean' in question['answers'][0]:

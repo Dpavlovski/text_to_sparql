@@ -15,7 +15,7 @@ async def fetch_similar_qa_pairs(question: str):
         vector=vector,
         score_threshold=0.2,
         top_k=5,
-        collection_name="lcquad2_0"
+        collection_name="lcquad2_0_mk"
     )
     return format_qa_sparql_examples(examples)
 
@@ -34,38 +34,41 @@ async def get_candidates(
     if not valid_keywords:
         return {}
 
-    query_vectors = [embed_value(k.value) for k in valid_keywords]
+    # query_vectors = []
+    # for k in valid_keywords:
+    #     search_text = f"{k.value}"
+    #     query_vectors.append(embed_value(search_text))
 
-    qdrant_batch_task = qdrant_db.search_embeddings_batch(
-        vectors=query_vectors,
-        collection_name="qald_10_labels",
-        score_threshold=0.7,
-        top_k=5,
-        filter={"lang": lang}
-    )
+    # qdrant_batch_task = qdrant_db.search_embeddings_batch(
+    #     vectors=query_vectors,
+    #     collection_name="qald_10_labels",
+    #     score_threshold=0.7,
+    #     top_k=5,
+    #     filter={"lang": lang}
+    # )
 
     wikidata_tasks = [
         search_wikidata(keyword=k.value, type=k.type, lang=lang)
         for k in valid_keywords
     ]
 
-    all_results = await asyncio.gather(qdrant_batch_task, *wikidata_tasks)
+    all_results = await asyncio.gather(*wikidata_tasks)
 
-    qdrant_results_per_keyword = all_results[0]
-    wikidata_results_per_keyword = all_results[1:]
+    # qdrant_results_per_keyword = all_results[0]
+    wikidata_results_per_keyword = all_results[0:]
 
     candidates_map: Dict[str, List[Dict[str, Any]]] = {}
 
     for i, keyword in enumerate(valid_keywords):
-        qdrant_candidates_for_keyword = qdrant_results_per_keyword[i] if i < len(qdrant_results_per_keyword) else []
+        # qdrant_candidates_for_keyword = qdrant_results_per_keyword[i] if i < len(qdrant_results_per_keyword) else []
         wikidata_candidates_for_keyword = wikidata_results_per_keyword[i] if i < len(
             wikidata_results_per_keyword) else []
 
         combined_list = format_candidates(
-            qdrant_candidates_for_keyword,
+            [],
             wikidata_candidates_for_keyword
         )
 
         candidates_map[keyword.value] = combined_list
 
-    return candidates_map
+    return wikidata_results_per_keyword

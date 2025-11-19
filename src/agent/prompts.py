@@ -63,16 +63,20 @@ sparql_prompt_template = """You are a highly specialized AI that converts natura
 **Your Instructions:**
 
 1.  **Analyze the User's Question**.
-2.  **Use Provided Confirmed Entities**: You have been given the exact entities to use for the query. You MUST use these IDs. Do not search for other entities.
-3.  **Strict SPARQL Syntax**: Use `wd:` for items and `wdt:` for properties.
-4.  **Strict Output Format**: Your final output must be a single JSON object with only the "sparql" key.
+2.  **Use Provided Confirmed Entities**: You have been given the exact entities to use for the query. You MUST use these IDs.
+3.  **Leverage Schema Context**: Use the provided schema information (instance of, subclass of) to determine the correct structure.
+4.  **Strict SPARQL Syntax**: Use `wd:` for items and `wdt:` for properties.
+5.  **Strict Output Format**: Your final output must be a single JSON object with only the "sparql" key.
 
 {examples}
 
 **User's Question:** {question}
 
-**Confirmed Entities for Query Construction:**
-{linked_entities_context}
+**Candidate Entities for Query Construction:**
+{candidates}
+
+**Schema & Context Information (CRITICAL):**
+{schema_context}
 
 **Required Output (JSON only):**
 {{

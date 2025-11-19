@@ -130,7 +130,7 @@ async def execute_sparql_query(query: str, retries: int = 3, delay: int = 5) -> 
 
                 if "results" in response_json and "bindings" in response_json["results"]:
                     bindings = response_json["results"]["bindings"]
-                    return [next(iter(binding.values())) for binding in bindings[:10]] if bindings else []
+                    return bindings[:10] if bindings else []
 
                 elif "boolean" in response_json:
                     return response_json["boolean"]

@@ -7,12 +7,12 @@ from langgraph.graph.state import CompiledStateGraph, StateGraph
 
 from src.agent.prompts import failure_no_results_message
 from src.agent.state import AgentState
-from src.llm.generic_llm import generic_llm
+from src.llm.llm_provider import llm_provider
 from src.tools.tools import generate_sparql, validate_results
 
 tools = [generate_sparql, validate_results]
 tools_by_name = {tool.name: tool for tool in tools}
-llm = generic_llm()
+llm = llm_provider.get_model("gpt-4.1-mini")
 llm_with_tools = llm.bind_tools(tools)
 
 
