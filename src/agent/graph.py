@@ -106,28 +106,52 @@ async def extract_previous_queries(state: AgentState) -> list[Any]:
     return previous_queries
 
 
-# --- Conditional Edge ---
-
 async def validation_node(state: AgentState):
     """
     Validates the SPARQL query results.
     """
+    # 1. Get the results from the previous Tool execution
     last_message = state["messages"][-1]
     original_question = state["original_question"]
-
-    # The result is in the content of the last message
     results = last_message.content
 
-    is_valid = await validate_results.ainvoke(
+    # 2. Invoke the validator
+    # Note: .ainvoke typically returns the output string directly or an artifact depending on config
+    validation_output = await validate_results.ainvoke(
         {"question": original_question, "results": results}
     )
 
+    # Handle cases where invoke returns a generic object or string
+    validation_text = str(validation_output)
+    if hasattr(validation_output, 'content'):
+        validation_text = validation_output.content
+
+    # 3. Boolean Check (Case-insensitive)
+    # The prompt asks for "yes" or "no", so we check if "yes" is in the response.
+    is_valid = "yes" in validation_text.lower()
+
     if is_valid:
-        return {"messages": [ToolMessage(content="Results are valid.", tool_call_id="validation")]}
+        # Success: Tell the LLM the data is good.
+        # It will then generate a final natural language response, triggering END.
+        return {
+            "messages": [
+                SystemMessage(
+                    content="The SPARQL results have been validated and appear correct. Please formulate your final answer to the user based on these results."
+                )
+            ]
+        }
     else:
-        # If the results are not valid, provide feedback to the LLM
-        content = "The previous query returned results that did not answer the question. Please try again."
-        return {"messages": [ToolMessage(content=content, tool_call_id="validation")]}
+        # Failure: Provide feedback to the LLM to trigger a retry.
+        # We use SystemMessage to inject instructions without breaking the tool_call chain.
+        content = (
+            f"The previous query returned results, but the automated validator determined "
+            f"they do not correctly answer the question: '{original_question}'.\n"
+            f"Validator Feedback: {validation_text}\n"
+            f"Please analyze the previous query and results, and generate a CORRECTED SPARQL query."
+        )
+        return {
+            "messages": [SystemMessage(content=content)]
+        }
 
 
 def should_continue(state: AgentState) -> str:

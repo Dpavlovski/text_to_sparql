@@ -19,7 +19,7 @@ def gerbil_eval(csv_filename: str, json_filename: str):
         """
         # Find first attempt in the group with non-empty results
         for idx, row in attempts_group:
-            if row.get('results') not in null_values:
+            if row.get('result') not in null_values:
                 return idx, row  # keep this attempt
         # Otherwise keep the last attempt in the group
         return attempts_group[-1]
@@ -59,8 +59,8 @@ def gerbil_eval(csv_filename: str, json_filename: str):
 
 def transform_entry(idx: int, row: dict, null_values: set):
     question = row.get('original_question', None)
-    sparql = row.get('sparql', None)
-    results = row.get('results', None)
+    sparql = row.get('generated_query', None)
+    results = row.get('result', None)
 
     entry = {
         "id": idx,
@@ -94,4 +94,4 @@ def transform_entry(idx: int, row: dict, null_values: set):
 
 
 if __name__ == '__main__':
-    gerbil_eval('../benchmark/sparql_outputs_mk.csv', '../gerbil/mk_results.json')
+    gerbil_eval('../benchmark/sparql_outputs_improved_linking.csv', '../gerbil/improved_linking.json')

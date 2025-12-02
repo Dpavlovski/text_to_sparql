@@ -1,3 +1,5 @@
+import asyncio
+
 from src.wikidata.api import execute_sparql_query
 
 SCHEMA_QUERY_TEMPLATE = """
@@ -43,27 +45,27 @@ async def get_entity_schema(entity_id: str) -> str:
     return context_str
 
 # --- Example Usage (for testing) ---
-# if __name__ == "__main__":
-#     async def run_tests():
-#         # Test 1: "animal" (wd:Q729)
-#         animal_id = "Q729"
-#         print(f"--- Schema for animal ({animal_id}) ---")
-#         context = await get_entity_schema(animal_id)
-#         print(context)
-#         print("\n" + "=" * 80 + "\n")
-#
-#         # Test 2: Douglas Adams (wd:Q42)
-#         douglas_adams_id = "Q42"
-#         print(f"--- Schema for Douglas Adams ({douglas_adams_id}) ---")
-#         context = await get_entity_schema(douglas_adams_id)
-#         print(context)
-#         print("\n" + "=" * 80 + "\n")
-#
-#         # Test 3: military operation (wd:Q645883)
-#         mil_op_id = "Q645883"
-#         print(f"--- Schema for military operation ({mil_op_id}) ---")
-#         context = await get_entity_schema(mil_op_id)
-#         print(context)
-#
-#
-#     asyncio.run(run_tests())
+if __name__ == "__main__":
+    async def run_tests():
+        # Test 1: "animal" (wd:Q729)
+        animal_id = "Q729"
+        print(f"--- Schema for animal ({animal_id}) ---")
+        context = await get_entity_schema(animal_id)
+        print(context)
+        print("\n" + "=" * 80 + "\n")
+
+        # Test 2: Douglas Adams (wd:Q42)
+        douglas_adams_id = "Q42"
+        print(f"--- Schema for Douglas Adams ({douglas_adams_id}) ---")
+        context = await get_entity_schema(douglas_adams_id)
+        print(context)
+        print("\n" + "=" * 80 + "\n")
+
+        # Test 3: military operation (wd:Q645883)
+        mil_op_id = "Q645883"
+        print(f"--- Schema for military operation ({mil_op_id}) ---")
+        context = await get_entity_schema(mil_op_id)
+        print(context)
+
+
+    asyncio.run(run_tests())

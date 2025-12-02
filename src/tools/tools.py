@@ -1,3 +1,4 @@
+import asyncio
 import time
 
 from langchain_core.prompts import PromptTemplate
@@ -8,6 +9,7 @@ from src.agent.prompts import validation_prompt
 from src.databases.qdrant.search_embeddings import fetch_similar_qa_pairs, get_candidates
 from src.llm.llm_provider import llm_provider
 from src.tools.ner import extract_entities
+from src.tools.schema import get_entity_schema
 from src.tools.sparql import get_sparql_query
 
 
@@ -38,33 +40,33 @@ async def generate_sparql(
     # 3. Disambiguate and get confirmed entities
     # linked_entities = await disambiguate_entities(question, candidates_map)
 
-    # schema_tasks = []
-    # candidate_meta = []  # To keep track of which schema belongs to which candidate
-    #
-    # for keyword, candidate_list in candidates_map.items():
-    #     # Iterate through the list of candidates for each keyword
-    #     # Limit to top 3 to avoid overloading the prompt/API if the list is long
-    #     for candidate in candidate_list[:3]:
-    #         qid = candidate.get('id')
-    #         label = candidate.get('label', 'Unknown')
-    #
-    #         if qid:
-    #             schema_tasks.append(get_entity_schema(qid))
-    #             candidate_meta.append((keyword, label, qid))
-    #
-    # # Run all schema queries in parallel
-    # if schema_tasks:
-    #     schema_results = await asyncio.gather(*schema_tasks)
-    # else:
-    #     schema_results = []
+    schema_tasks = []
+    candidate_meta = []  # To keep track of which schema belongs to which candidate
+
+    for keyword, candidate_list in candidates_map.items():
+        # Iterate through the list of candidates for each keyword
+        # Limit to top 3 to avoid overloading the prompt/API if the list is long
+        for candidate in candidate_list[:3]:
+            qid = candidate.get('id')
+            label = candidate.get('label', 'Unknown')
+
+            if qid:
+                schema_tasks.append(get_entity_schema(qid))
+                candidate_meta.append((keyword, label, qid))
+
+    # Run all schema queries in parallel
+    if schema_tasks:
+        schema_results = await asyncio.gather(*schema_tasks)
+    else:
+        schema_results = []
 
     # 4. Build the Schema Context String
-    # schema_context = ""
-    # for i, (keyword, label, qid) in enumerate(candidate_meta):
-    #     result_text = schema_results[i]
-    #     # Only add to context if we found useful info
-    #     if result_text and not result_text.startswith("# No schema"):
-    #         schema_context += f"### Keyword: '{keyword}' -> Candidate: '{label}' ({qid})\n{result_text}\n\n"
+    schema_context = ""
+    for i, (keyword, label, qid) in enumerate(candidate_meta):
+        result_text = schema_results[i]
+        # Only add to context if we found useful info
+        if result_text and not result_text.startswith("# No schema"):
+            schema_context += f"### Keyword: '{keyword}' -> Candidate: '{label}' ({qid})\n{result_text}\n\n"
 
     # 4. Retrieve examples to guide the LLM
     examples = await fetch_similar_qa_pairs(question)
@@ -97,7 +99,7 @@ async def generate_sparql(
         "rephrased_question": question,
         "ner": str(ner_response),
         "candidates": str(candidates_map),
-        "schema_context": str(None),
+        "schema_context": str(schema_context),
         "examples": str(examples),
         "generated_query": str(response.get("sparql")),
         "result": results_for_log,
