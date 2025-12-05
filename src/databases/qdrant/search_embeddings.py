@@ -1,6 +1,7 @@
 import asyncio
 from typing import List, Any, Dict
 
+from src.config.config import BenchmarkConfig
 from src.databases.qdrant.qdrant import qdrant_db
 from src.llm.embed_labels import embed_value
 from src.utils.format_candidates import format_candidates
@@ -8,14 +9,25 @@ from src.utils.format_examples import format_qa_sparql_examples
 from src.wikidata.api import search_wikidata
 
 
-async def fetch_similar_qa_pairs(question: str):
-    """Fetches similar question-answer pairs to use as few-shot examples."""
+async def fetch_similar_qa_pairs(question: str, lang: str = "en"):
+    """Fetches similar question-answer pairs using language-specific collection."""
+
+    # Initialize config to get correct collection name
+    config = BenchmarkConfig(lang)
+    collection_name = config.get_collection_name("few_shot")
+
     vector = embed_value(question)
+
+    # Check if collection exists before searching to prevent crashes
+    if not await qdrant_db.collection_exists(collection_name):
+        print(f"Warning: Few-shot collection {collection_name} not found. Returning empty.")
+        return ""
+
     examples = await qdrant_db.search_embeddings(
         vector=vector,
         score_threshold=0.2,
         top_k=5,
-        collection_name="lcquad2_0"
+        collection_name=collection_name
     )
     return format_qa_sparql_examples(examples)
 

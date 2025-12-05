@@ -32,14 +32,19 @@ Try to modify and improve your next query to retrieve meaningful results.
 """
 
 validation_prompt = """
-You are an expert at validating SPARQL query results. Your task is to determine if the given results accurately and completely answer the user's question.
+You are an expert at validating SPARQL query results. 
 
 User Question: "{question}"
 
-SPARQL Query Results:
+SPARQL Query Results and Entity Context:
 {results}
 
-Does the result answer the question? Please respond with "yes" or "no".
+**Instructions:**
+1. Check if the **Format** is correct (e.g., if the user asked for a list, is it a list?).
+2. Check if the **Entity Types** make sense (e.g., if asked for a person, are the results people?). use the provided 'Entity Definitions' to understand what the IDs represent.
+3. Do NOT reject the result just because you don't know the specific fact, provided the Entity Type is correct.
+
+Does the result answer the question?
 """
 
 ner_prompt = """Your task is to extract all relevant keywords and phrases from the given question that could help in identifying Wikidata entities and properties. You must also identify the language of the question. The question can be in any language.

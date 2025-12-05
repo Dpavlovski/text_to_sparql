@@ -7,4 +7,5 @@ class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], lambda x, y: x + y]
     attempts: int
     original_question: str
+    language: str
     log_data: Annotated[list[dict[str, Any]], lambda x, y: x + y]

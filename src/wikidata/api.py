@@ -1,9 +1,10 @@
 import asyncio
 import sys
 import time
-from typing import Any
+from typing import Any, List, Dict
 
 import aiohttp
+import requests
 
 from src.http_client.session import get_session
 from src.wikidata.prefixes import PREFIXES
@@ -149,68 +150,70 @@ async def execute_sparql_query(query: str, retries: int = 3, delay: int = 5) -> 
             return None
     return None
 
-# print(asyncio.run(execute_sparql_query('SELECT ?person ?personLabel WHERE { wd:Q761383 wdt:P138 ?person . SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } }')))
 
-# HEADERS = {
-#     'User-Agent': 'RatioAnalysisScript/1.0 (mailto:user@example.com)'
-# }
-# API_ENDPOINT = "https://www.wikidata.org/w/api.php"
-# ID_CHUNK_SIZE = 50  # API limit for wbgetentities
-#
-#
-# def get_wikidata_labels(entity_ids: List[str], language: str = 'en') -> Dict[str, str]:
-#     """
-#     Fetches labels for a list of Wikidata entity IDs (e.g., 'Q42', 'P31').
-#
-#     This function automatically handles batching to respect the API's limit of 50 IDs
-#     per request. It is resilient to network errors and safely handles cases
-#     where an ID has no label for the specified language.
-#
-#     Args:
-#         entity_ids: A list of Wikidata entity IDs as strings.
-#         language: The language code for the labels to retrieve (e.g., 'en', 'de', 'es').
-#                   Defaults to 'en' (English).
-#
-#     Returns:
-#         A dictionary mapping each entity ID to its corresponding label. IDs that
-#         could not be found or had no label in the specified language are omitted.
-#     """
-#     if not entity_ids:
-#         return {}
-#
-#     results: Dict[str, str] = {}
-#
-#     # Split the list of IDs into chunks of 50
-#     for i in range(0, len(entity_ids), ID_CHUNK_SIZE):
-#         id_chunk = entity_ids[i:i + ID_CHUNK_SIZE]
-#
-#         params = {
-#             'action': 'wbgetentities',
-#             'ids': '|'.join(id_chunk),
-#             'props': 'labels',
-#             'languages': language,
-#             'format': 'json',
-#         }
-#
-#         try:
-#             response = requests.get(API_ENDPOINT, params=params, headers=HEADERS, timeout=15)
-#             # Raise an exception for bad status codes (4xx or 5xx)
-#             response.raise_for_status()
-#             data = response.json()
-#
-#             # Safely parse the response
-#             entities = data.get('entities', {})
-#             for entity_id, entity_data in entities.items():
-#                 label_data = entity_data.get('labels', {}).get(language)
-#                 if label_data:
-#                     results[entity_id] = label_data['value']
-#
-#         except requests.exceptions.RequestException as e:
-#             print(f"--> API Error during request for IDs {id_chunk}: {e}")
-#             # Continue to the next chunk without crashing
-#             continue
-#
-#     return results
+print(asyncio.run(execute_sparql_query(
+    'SELECT ?person ?personLabel WHERE { wd:Q761383 wdt:P138 ?person . SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } }')))
+
+HEADERS = {
+    'User-Agent': 'RatioAnalysisScript/1.0 (mailto:user@example.com)'
+}
+API_ENDPOINT = "https://www.wikidata.org/w/api.php"
+ID_CHUNK_SIZE = 50  # API limit for wbgetentities
+
+
+def get_wikidata_labels(entity_ids: List[str], language: str = 'en') -> Dict[str, str]:
+    """
+    Fetches labels for a list of Wikidata entity IDs (e.g., 'Q42', 'P31').
+
+    This function automatically handles batching to respect the API's limit of 50 IDs
+    per request. It is resilient to network errors and safely handles cases
+    where an ID has no label for the specified language.
+
+    Args:
+        entity_ids: A list of Wikidata entity IDs as strings.
+        language: The language code for the labels to retrieve (e.g., 'en', 'de', 'es').
+                  Defaults to 'en' (English).
+
+    Returns:
+        A dictionary mapping each entity ID to its corresponding label. IDs that
+        could not be found or had no label in the specified language are omitted.
+    """
+    if not entity_ids:
+        return {}
+
+    results: Dict[str, str] = {}
+
+    # Split the list of IDs into chunks of 50
+    for i in range(0, len(entity_ids), ID_CHUNK_SIZE):
+        id_chunk = entity_ids[i:i + ID_CHUNK_SIZE]
+
+        params = {
+            'action': 'wbgetentities',
+            'ids': '|'.join(id_chunk),
+            'props': 'labels',
+            'languages': language,
+            'format': 'json',
+        }
+
+        try:
+            response = requests.get(API_ENDPOINT, params=params, headers=HEADERS, timeout=15)
+            # Raise an exception for bad status codes (4xx or 5xx)
+            response.raise_for_status()
+            data = response.json()
+
+            # Safely parse the response
+            entities = data.get('entities', {})
+            for entity_id, entity_data in entities.items():
+                label_data = entity_data.get('labels', {}).get(language)
+                if label_data:
+                    results[entity_id] = label_data['value']
+
+        except requests.exceptions.RequestException as e:
+            print(f"--> API Error during request for IDs {id_chunk}: {e}")
+            # Continue to the next chunk without crashing
+            continue
+
+    return results
 #
 #
 # if __name__ == '__main__':

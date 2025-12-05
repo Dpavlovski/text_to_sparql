@@ -17,6 +17,8 @@ from src.tools.sparql import get_sparql_query
 async def generate_sparql(
         question: str = Field(description="The possibly rephrased natural language question"),
         original_question: str = Field(description="The original question before any modification"),
+        language: str = "en"
+
 ) -> dict:
     """
     Generates a SPARQL query from a natural language question by enriching it with
@@ -25,6 +27,7 @@ async def generate_sparql(
     Args:
         question (str): The user's natural language question.
         original_question (str): The original, unmodified question for logging.
+        language (str): The language of the question and examples.
 
     Returns:
         A dictionary containing the generated SPARQL query or an error message.
@@ -41,11 +44,9 @@ async def generate_sparql(
     # linked_entities = await disambiguate_entities(question, candidates_map)
 
     schema_tasks = []
-    candidate_meta = []  # To keep track of which schema belongs to which candidate
+    candidate_meta = []
 
     for keyword, candidate_list in candidates_map.items():
-        # Iterate through the list of candidates for each keyword
-        # Limit to top 3 to avoid overloading the prompt/API if the list is long
         for candidate in candidate_list[:3]:
             qid = candidate.get('id')
             label = candidate.get('label', 'Unknown')
@@ -54,7 +55,6 @@ async def generate_sparql(
                 schema_tasks.append(get_entity_schema(qid))
                 candidate_meta.append((keyword, label, qid))
 
-    # Run all schema queries in parallel
     if schema_tasks:
         schema_results = await asyncio.gather(*schema_tasks)
     else:
@@ -69,7 +69,7 @@ async def generate_sparql(
             schema_context += f"### Keyword: '{keyword}' -> Candidate: '{label}' ({qid})\n{result_text}\n\n"
 
     # 4. Retrieve examples to guide the LLM
-    examples = await fetch_similar_qa_pairs(question)
+    examples = await fetch_similar_qa_pairs(original_question, lang=language)
 
     # 5. Generate the SPARQL query
     response = await get_sparql_query(question, examples, candidates_map, None)
@@ -91,7 +91,6 @@ async def generate_sparql(
                             break
             results_for_log = "\n".join(extracted_uris)
 
-    # Now use 'results_for_log' in your log_data dictionary
     execution_time = time.monotonic() - start_time
 
     log_data = {
@@ -111,6 +110,13 @@ async def generate_sparql(
     return response
 
 
+from pydantic import BaseModel, Field
+
+
+class ValidationResult(BaseModel):
+    is_valid: bool = Field(
+        description="Set to True if the SPARQL results correctly answer the user's question, otherwise False.")
+
 @tool("validate_results")
 async def validate_results(question: str, results: str) -> bool:
     """
@@ -121,7 +127,7 @@ async def validate_results(question: str, results: str) -> bool:
         results=results
     )
     llm = llm_provider.get_model(model_identifier="kwaipilot/kat-coder-pro:free").with_structured_output(
-        bool
+        ValidationResult
     )
     response = await llm.ainvoke(prompt)
-    return "yes" in response.content.lower()
+    return response.is_valid
