@@ -47,7 +47,8 @@ SPARQL Query Results and Entity Context:
 Does the result answer the question?
 """
 
-ner_prompt = """Your task is to extract all relevant keywords and phrases from the given question that could help in identifying Wikidata entities and properties. You must also identify the language of the question. The question can be in any language.
+ner_prompt = """Your task is to extract all relevant keywords and phrases from the given question that could help in identifying Wikidata entities and properties. For each keyword, provide a 'context' description based on the question. You must also identify the language of the question. The question can be in any language. 
+
 
 Question: 
 {question}
@@ -57,47 +58,37 @@ Format:
     - "lang": A string representing the language code of the question (e.g., "en", "es", "fr").
     - "keywords": A list of JSON objects. Each object must have these two keys:
         - "value": The extracted keyword or phrase as a string.
+        - "context": A short 3-5 word description of what this entity likely represents in the context of the question (e.g., "mathematical concept", "person", "city").
         - "type": The type of the keyword. Must be one of the following strings:
             - "item": For distinct entities like people, places, organizations, or concepts (e.g., "Leonardo da Vinci", "Paris", "Google", "Mona Lisa").
             - "property": For attributes, relationships, or actions related to an item (e.g., "date of birth", "capital of", "invented", "painted").
 - If no relevant keywords are found, the "keywords" list should be an empty list [].
 """
 
-sparql_prompt_template = """You are a highly specialized AI that converts natural language questions into precise SPARQL queries for Wikidata.
+sparql_prompt_template = """You are an expert Wikidata SPARQL developer. Your goal is to construct a syntactically correct and semantically accurate SPARQL query to answer the user's question.
 
-**Your Instructions:**
+### 1. Analysis Strategy
+- **Entities**: Map the user's keywords to the provided **Candidate Entities** (QIDs/PIDs).
+- **Logic**: Determine if the user wants a list, a count, a specific date, or a boolean (ASK) answer.
 
-1.  **Analyze the User's Question**.
-2.  **Use Provided Confirmed Entities**: You have been given the exact entities to use for the query. You MUST use these IDs.
-3.  **Leverage Schema Context**: Use the provided schema information (instance of, subclass of) to determine the correct structure.
-4.  **Strict SPARQL Syntax**: Use `wd:` for items and `wdt:` for properties.
-5.  **Strict Output Format**: Your final output must be a single JSON object with only the "sparql" key.
+### 2. Constraints & Rules
+- **Prefixes**: Assume standard prefixes (`wd:`, `wdt:`, `p:`, `ps:`, `pq:`) are already defined. Do not output `PREFIX` lines.
+- **Label Service**: If the user asks for names, always include: `SERVICE wikibase:label {{ bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }}`.
+- **Filtering**: Use `FILTER` for dates or string matching if necessary.
+- **Limit**: Use `LIMIT 10` unless the user asks for "all" or a specific count.
 
-{examples}
+### 3. Context Data
+**User Question:** "{question}"
 
-**User's Question:** {question}
-
-**Candidate Entities for Query Construction:**
+**Candidate Entities (Use these IDs):**
 {candidates}
 
-**Schema & Context Information (CRITICAL):**
-{schema_context}
 
-**Required Output (JSON only):**
-{{
-  "sparql": "YOUR_SPARQL_QUERY_GOES_HERE"
-}}
-"""
+### 4. Few-Shot Examples
+{examples}
 
-disambiguation_prompt_template = """You are an expert entity disambiguation AI. Your task is to select the single correct entity for each mention from a list of candidates, based on the user's question.
-
-Analyze the user's question to understand its context. Then, for each mention, review its list of candidates. Choose the candidate whose description best fits the context.
-
-User Question: "{question}"
-
-**Candidates:**
-{formatted_candidates}
-
-Your response MUST be a JSON object that maps each mention to its single, correct entity ID.
-Example response: {{"Paris": "wd:Q90", "France": "wd:Q142"}}
+### 5. Final Output
+Return a **JSON object** with two keys:
+1. "reasoning": A brief sentence explaining which entities and properties you chose.
+2. "sparql": The valid SPARQL query string.
 """

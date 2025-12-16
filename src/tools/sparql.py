@@ -1,98 +1,64 @@
-import json
-from typing import List, Any, Dict
+from typing import Any, Dict
 
+from pydantic import BaseModel, Field
 from rdflib.plugins.sparql import prepareQuery
 
-from src.agent.prompts import sparql_prompt_template, disambiguation_prompt_template
+from src.agent.prompts import sparql_prompt_template
 from src.llm.llm_provider import llm_provider
 from src.wikidata.api import execute_sparql_query
-from src.wikidata.prefixes import PREFIXES
+from src.wikidata.prefixes import ensure_prefixes
 
 
-def format_candidates_for_disambiguation(candidates_map: Dict[str, List[Dict[str, Any]]]) -> str:
-    """Formats the candidate map into a readable string for the prompt."""
-    output = ""
-    for mention, candidates in candidates_map.items():
-        output += f"For the mention '{mention}':\n"
-        if not candidates:
-            output += "  - No candidates found.\n"
-            continue
-        for i, cand in enumerate(candidates):
-            output += f"  {i + 1}. ID: {cand['id']}, Label: {cand['label']}, Description: {cand['description']}\n"
-        output += "\n"
-    return output.strip()
-
-
-def format_linked_entities_for_prompt(linked_entities: Dict[str, str]) -> str:
-    """Formats the confirmed entities into a readable string for the prompt."""
-    return "\n".join(
-        f"- The entity for the mention '{mention}' is `{entity_id}`."
-        for mention, entity_id in linked_entities.items()
-    )
-
-
-async def disambiguate_entities(
-        question: str,
-        candidates_map: Dict[str, List[Dict[str, Any]]]
-) -> Dict[str, str]:
-    """
-    Takes a question and a map of ambiguous candidates and returns a map of confirmed entity IDs.
-    """
-    if not candidates_map:
-        return {}
-
-    formatted_candidates = format_candidates_for_disambiguation(candidates_map)
-
-    prompt = disambiguation_prompt_template.format(
-        question=question,
-        formatted_candidates=formatted_candidates
-    )
-
-    linked_entities = await llm_provider.get_model("gpt-4.1-mini").ainvoke(prompt)
-
-    if not isinstance(linked_entities, dict):
-        raise ValueError("Disambiguation response was not a valid dictionary.")
-
-    return linked_entities
+# 2. Define the output structure
+class SparqlGenerationResponse(BaseModel):
+    reasoning: str = Field(description="Brief explanation of the logic and entities chosen.")
+    sparql: str = Field(description="The valid SPARQL query without markdown formatting.")
 
 
 def validate_sparql(query: str):
+    """Validates syntax using rdflib."""
     try:
-        full_query = PREFIXES + query
-        prepareQuery(full_query)
+        prepareQuery(query)
         return True, "Query is valid."
     except Exception as e:
-        return False, f"Validation error: {e}"
+        return False, f"Syntax Error: {e}"
 
 
 async def get_sparql_query(
         question: str,
         examples: str,
-        candidates_map: Any,
-        schema_context: Any
+        candidates: str,
 ) -> Dict[str, Any]:
-    # linked_entities_context = format_linked_entities_for_prompt(linked_entities)
-    # candidates = format_linked_entities_for_prompt(candidates_map)
     sparql_prompt = sparql_prompt_template.format(
         examples=examples,
         question=question,
-        candidates=candidates_map,
-        schema_context=schema_context
+        candidates=candidates,
     )
+
     llm = llm_provider.get_model("gpt-4.1-mini")
-    llm.with_structured_output(method="json_mode")
-    ai_message_result = await llm.ainvoke(sparql_prompt)
+    structured_llm = llm.with_structured_output(SparqlGenerationResponse)
 
-    sparql_json_string = ai_message_result.content
-    sparql_json = json.loads(sparql_json_string)
-    if not sparql_json or "sparql" not in sparql_json:
-        raise ValueError("Missing 'sparql' in generation response")
+    try:
+        generation: SparqlGenerationResponse = await structured_llm.ainvoke(sparql_prompt)
+    except Exception as e:
+        return {"sparql": "", "results": [], "error": f"LLM Generation Error: {e}"}
 
-    sparql_query_str = sparql_json["sparql"]
-    is_valid, msg = validate_sparql(sparql_query_str)
+        # Inject prefixes before sending to execution
+    final_query = ensure_prefixes(generation.sparql)
+
+    # Validation
+    is_valid, validation_msg = validate_sparql(final_query)
     results = None
 
     if is_valid:
-        results = await execute_sparql_query(sparql_query_str)
+        try:
+            results = await execute_sparql_query(final_query)
+        except Exception as e:
+            return {"sparql": generation.sparql, "results": None, "error": str(e)}
 
-    return {"sparql": sparql_query_str, "results": results}
+    return {
+        "sparql": generation.sparql,
+        "results": results,
+        "reasoning": generation.reasoning,
+        "is_valid": is_valid
+    }

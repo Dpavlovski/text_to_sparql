@@ -7,6 +7,9 @@ from typing import Set, Tuple, Dict, Any
 
 import pandas as pd
 
+# Import the label fetcher from your existing API module
+from src.wikidata.api import get_wikidata_labels
+
 
 class SPARQLUtils:
     """Helper methods for string extraction and normalization."""
@@ -127,6 +130,33 @@ class AnalysisPipeline:
         self.json_path = Path(qald_json)
         self.lang = lang
         self.df = pd.DataFrame()
+        self.label_cache = {}  # Cache to store fetched labels
+
+    def fetch_all_labels(self, all_ids: Set[str]):
+        """Fetches labels for all unique IDs found in the dataset."""
+        print(f"🌍 Fetching labels for {len(all_ids)} unique entities...")
+        if not all_ids:
+            return
+
+        # Convert to list for the API function
+        ids_list = list(all_ids)
+
+        try:
+            # Assumes get_wikidata_labels handles chunking (50 IDs limit) internally
+            # If your get_wikidata_labels is strictly for list->dict, this works directly.
+            labels = get_wikidata_labels(ids_list, language=self.lang)
+            self.label_cache.update(labels)
+            print(f"✅ Cached {len(self.label_cache)} labels.")
+        except Exception as e:
+            print(f"⚠️ Warning: Failed to fetch labels: {e}")
+
+    def format_ids(self, ids_set: Set[str]) -> str:
+        """Formats a set of IDs into 'Label (ID)' string."""
+        formatted = []
+        for qid in sorted(list(ids_set)):
+            label = self.label_cache.get(qid, "Unknown")
+            formatted.append(f"{label} ({qid})")
+        return ", ".join(formatted)
 
     def run(self, output_path: str):
         print(f"🚀 Starting Analysis...")
@@ -151,15 +181,27 @@ class AnalysisPipeline:
         print("🔗 Merging datasets...")
         self.df[['question_id', 'gold_query', 'gold_result']] = self.df.apply(enrich_row, axis=1)
 
-        # 3. Calculate ID Metrics
+        # --- PRE-FETCH LABELS ---
+        print("🔍 Extracting all IDs for label lookup...")
+        all_unique_ids = set()
+        for _, row in self.df.iterrows():
+            gen_q = str(row.get('generated_query', row.get('sparql', '')))
+            gold_q = str(row.get('gold_query', ''))
+            all_unique_ids.update(SPARQLUtils.extract_ids_from_text(gen_q))
+            all_unique_ids.update(SPARQLUtils.extract_ids_from_text(gold_q))
+
+        self.fetch_all_labels(all_unique_ids)
+
+        # 3. Calculate ID Metrics (With Label Formatting)
         def calc_id_metrics(row):
             gen_query = str(row.get('generated_query', row.get('sparql', '')))
             gold_query = str(row.get('gold_query', ''))
             gen_ids = SPARQLUtils.extract_ids_from_text(gen_query)
             gold_ids = SPARQLUtils.extract_ids_from_text(gold_query)
 
-            gen_ids_list = str(sorted(list(gen_ids)))
-            gold_ids_list = str(sorted(list(gold_ids)))
+            # Use formatted strings with labels
+            gen_ids_list = self.format_ids(gen_ids)
+            gold_ids_list = self.format_ids(gold_ids)
 
             if not gold_ids: return gen_ids_list, gold_ids_list, 0.0
             matches = len(gen_ids.intersection(gold_ids))
@@ -169,7 +211,7 @@ class AnalysisPipeline:
             lambda r: pd.Series(calc_id_metrics(r)), axis=1
         )
 
-        # 4. Calculate Keyword Metrics (UPDATED)
+        # 4. Calculate Keyword Metrics
         def calc_kw_metrics(row):
             gen_query = str(row.get('generated_query', row.get('sparql', '')))
             gold_query = str(row.get('gold_query', ''))
@@ -181,7 +223,6 @@ class AnalysisPipeline:
             _, _, f1 = SPARQLUtils.calculate_f1(gen_set, gold_set)
             return gen_list_str, gold_list_str, round(f1, 3)
 
-        # Changed column name to 'keyword_match_ratio'
         self.df[['generated_keywords', 'gold_keywords', 'keyword_match_ratio']] = self.df.apply(
             lambda r: pd.Series(calc_kw_metrics(r)), axis=1
         )
@@ -214,7 +255,7 @@ class AnalysisPipeline:
             'original_question',
             'generated_query', 'gold_query',
             'candidate_ids', 'gold_wikidata_ids', 'id_match_score',
-            'generated_keywords', 'gold_keywords', 'keyword_match_ratio',  # <--- Included here
+            'generated_keywords', 'gold_keywords', 'keyword_match_ratio',
             'result', 'gold_result', 'res_f1'
         ]
 
@@ -228,7 +269,7 @@ class AnalysisPipeline:
         print(f"\n💾 Analysis saved to: {output_path}")
 
     def _print_detailed_analysis(self):
-        """Prints the analysis table similar to the requested snippet."""
+        """Prints the analysis table."""
         valid_df = self.df[self.df['gold_query'] != '']
 
         def has_results(val):
@@ -266,9 +307,9 @@ class AnalysisPipeline:
 
 
 if __name__ == "__main__":
-    GENERATED_CSV = "../../results/benchmark/sparql_outputs_en_v3.csv"
+    GENERATED_CSV = "../../results/benchmark/sparql_outputs_en_V3_FINAL_ANALYSIS.csv"
     QALD_JSON = "../../qald_10_with_mk.json"
-    OUTPUT_CSV = "../../results/benchmark/sparql_outputs_en_v3_FINAL_ANALYSIS.csv"
+    OUTPUT_CSV = "../../results/benchmark/sparql_outputs_en_v3_FINAL_ANALYSIS_V2.csv"
     LANGUAGE = "en"
 
     if Path(GENERATED_CSV).exists() and Path(QALD_JSON).exists():

@@ -40,6 +40,7 @@ sacremoses = "^0.1.1"
 pydantic = "^2.11.9"
 dependency-injector = "^4.48.2"
 streamlit = "^1.51.0"
+plotly = "^6.5.0"
 
 
 [build-system]

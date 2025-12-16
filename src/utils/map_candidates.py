@@ -41,13 +41,13 @@ def _normalize_entity(entity: Any) -> Optional[Dict[str, Any]]:
         return {
             "id": entity.get('id'),
             "label": entity.get('label', 'N/A'),
-            "description": entity.get('description', 'No description available')
+            "description": entity.get('description', '')
         }
 
     return None
 
 
-def format_candidates(
+def map_candidates(
         wikidata_api_results: List[Dict[str, Any]],
         qdrant_results: Union[List[ScoredPoint], Any]
 ) -> List[Dict[str, Any]]:

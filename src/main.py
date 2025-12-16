@@ -13,14 +13,13 @@ from src.databases.qdrant.qdrant import qdrant_db
 from src.dataset.qald_10 import load_qald_json
 from src.http_client.session import close_session
 
-TARGET_LANGUAGE = "en"
+TARGET_LANGUAGE = "zh"
 
 CSV_HEADER = [
     "original_question",
     "rephrased_question",
     "ner",
     "candidates",
-    "schema_context",
     "examples",
     "generated_query",
     "result",
@@ -99,7 +98,7 @@ async def main():
     print(f"\n\nSCRIPT FINISHED. Results are in '{csv_file_name}'.")
 
     try:
-        qdrant_db.client.close()
+        await qdrant_db.client.close()
         await close_session()
     except Exception as e:
         print(f"Error during cleanup: {e}")

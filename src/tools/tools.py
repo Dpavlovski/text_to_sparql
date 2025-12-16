@@ -1,104 +1,92 @@
-import asyncio
 import time
+from typing import List
 
 from langchain_core.prompts import PromptTemplate
 from langchain_core.tools import tool
-from pydantic import Field
+from pydantic import Field, BaseModel
 
 from src.agent.prompts import validation_prompt
-from src.databases.qdrant.search_embeddings import fetch_similar_qa_pairs, get_candidates
 from src.llm.llm_provider import llm_provider
-from src.tools.ner import extract_entities
-from src.tools.schema import get_entity_schema
+from src.tools.ner import Keyword
 from src.tools.sparql import get_sparql_query
 
 
 @tool("generate_sparql_query")
 async def generate_sparql(
         question: str = Field(description="The possibly rephrased natural language question"),
-        original_question: str = Field(description="The original question before any modification"),
-        language: str = "en"
-
+        original_question: str = Field(description="The original question", default=""),
+        candidates: str = Field(description="Pre-retrieved candidates", default=""),
+        examples: str = Field(description="Pre-retrieved few-shot examples", default=""),
+        ner_keywords: List[Keyword] = Field(description="Pre-retrieved NER keywords", default_factory=list),
 ) -> dict:
     """
-    Generates a SPARQL query from a natural language question by enriching it with
-    named entities and relevant examples.
-
-    Args:
-        question (str): The user's natural language question.
-        original_question (str): The original, unmodified question for logging.
-        language (str): The language of the question and examples.
-
-    Returns:
-        A dictionary containing the generated SPARQL query or an error message.
+    Generates and executes a SPARQL query using the provided context.
     """
     start_time = time.monotonic()
 
-    # 1. Extract named entities
-    ner_response = await extract_entities(question)
-
-    # 2. Find similar entities to augment search
-    candidates_map = await get_candidates(ner_response.keywords, ner_response.lang)
-
-    # 3. Disambiguate and get confirmed entities
-    # linked_entities = await disambiguate_entities(question, candidates_map)
-
-    schema_tasks = []
-    candidate_meta = []
-
-    for keyword, candidate_list in candidates_map.items():
-        for candidate in candidate_list[:3]:
-            qid = candidate.get('id')
-            label = candidate.get('label', 'Unknown')
-
-            if qid:
-                schema_tasks.append(get_entity_schema(qid))
-                candidate_meta.append((keyword, label, qid))
-
-    if schema_tasks:
-        schema_results = await asyncio.gather(*schema_tasks)
-    else:
-        schema_results = []
-
-    # 4. Build the Schema Context String
-    schema_context = ""
-    for i, (keyword, label, qid) in enumerate(candidate_meta):
-        result_text = schema_results[i]
-        # Only add to context if we found useful info
-        if result_text and not result_text.startswith("# No schema"):
-            schema_context += f"### Keyword: '{keyword}' -> Candidate: '{label}' ({qid})\n{result_text}\n\n"
-
-    # 4. Retrieve examples to guide the LLM
-    examples = await fetch_similar_qa_pairs(original_question, lang=language)
-
-    # 5. Generate the SPARQL query
-    response = await get_sparql_query(question, examples, candidates_map, None)
+    response = await get_sparql_query(
+        question=question,
+        examples=examples,
+        candidates=candidates,
+    )
 
     results_for_log = None
     raw_results = response.get('results')
 
     if raw_results is not None:
+
+        # ASK questions
         if isinstance(raw_results, bool):
-            results_for_log = str(raw_results)
-        elif isinstance(raw_results, list):
-            extracted_uris = []
-            for result_row in raw_results:
-                for key, value_dict in result_row.items():
-                    if isinstance(value_dict, dict):
-                        val = value_dict.get('value')
+            results_for_log = raw_results
+
+        # SELECT questions with results
+        elif isinstance(raw_results, list) and raw_results:
+            extracted_values = []
+
+            for row in raw_results:
+                if not isinstance(row, dict):
+                    continue
+
+                for var, val_dict in row.items():
+                    if isinstance(val_dict, dict):
+                        val = val_dict.get("value")
                         if val:
-                            extracted_uris.append(val)
-                            break
-            results_for_log = "\n".join(extracted_uris)
+                            extracted_values.append(val)
+
+            # remove duplicates, preserve order
+            seen = set()
+            extracted_values = [
+                x for x in extracted_values
+                if not (x in seen or seen.add(x))
+            ]
+
+            # 🔹 FINAL TOOL FORMATTING
+            results_for_log = " ".join(str(v) for v in extracted_values)
+
+        # SELECT questions with NO results
+        elif isinstance(raw_results, list) and not raw_results:
+            results_for_log = None
+
+        else:
+            results_for_log = None
 
     execution_time = time.monotonic() - start_time
+
+    ner_log_str = ""
+    if ner_keywords:
+        items = []
+        for k in ner_keywords:
+            if isinstance(k, dict):
+                items.append(f"{k.get('value')} {k.get('context')} ({k.get('type')})")
+            elif hasattr(k, 'value') and hasattr(k, 'type'):
+                items.append(f"{k.value} {k.context} ({k.type})")
+        ner_log_str = ", ".join(items)
 
     log_data = {
         "original_question": original_question,
         "rephrased_question": question,
-        "ner": str(ner_response),
-        "candidates": str(candidates_map),
-        "schema_context": str(schema_context),
+        "ner": ner_log_str,
+        "candidates": str(candidates),
         "examples": str(examples),
         "generated_query": str(response.get("sparql")),
         "result": results_for_log,
@@ -110,12 +98,10 @@ async def generate_sparql(
     return response
 
 
-from pydantic import BaseModel, Field
-
-
 class ValidationResult(BaseModel):
     is_valid: bool = Field(
         description="Set to True if the SPARQL results correctly answer the user's question, otherwise False.")
+
 
 @tool("validate_results")
 async def validate_results(question: str, results: str) -> bool:

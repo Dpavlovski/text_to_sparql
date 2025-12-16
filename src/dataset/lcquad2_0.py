@@ -1,13 +1,14 @@
 from datasets import load_dataset, concatenate_datasets
 from transformers import pipeline
 
+# 1. CHANGED: Model updated to English -> Russian (ru)
 try:
     TRANSLATOR = pipeline(
         "translation",
-        model="Helsinki-NLP/opus-mt-en-mk",
-        device=-1
+        model="Helsinki-NLP/opus-mt-en-ru",
+        device=-1  # Use 0 if you have a GPU, -1 for CPU
     )
-    print("Macedonian translation model loaded successfully.")
+    print("Russian translation model loaded successfully.")
 except Exception as e:
     print(f"Error loading translation model: {e}")
     TRANSLATOR = None
@@ -21,12 +22,10 @@ def get_dataset():
     return combined_dataset
 
 
-def translate_batch_to_mkd(questions: list[str]) -> list[str]:
+# 2. CHANGED: Function name and logic for Russian
+def translate_batch_to_ru(questions: list[str]) -> list[str]:
     """
-    Translates a batch of English questions to Macedonian.
-
-    This function is updated to safely handle None, empty, or non-string
-    values in the batch, which caused the ValueError.
+    Translates a batch of English questions to Russian.
     """
     if not TRANSLATOR:
         return [f"ERROR: MODEL NOT LOADED. ORIGINAL: {q}" for q in questions]
@@ -42,6 +41,7 @@ def translate_batch_to_mkd(questions: list[str]) -> list[str]:
     full_output = [''] * len(questions)
 
     if valid_questions:
+        # 3. Translation execution
         results = TRANSLATOR(valid_questions, max_length=256, batch_size=16, truncation=True)
         translated_texts = [item['translation_text'] for item in results]
 
@@ -54,16 +54,20 @@ def translate_batch_to_mkd(questions: list[str]) -> list[str]:
 def get_translated_and_embedded_dataset():
     dataset = get_dataset()
 
-    print("Starting translation to Macedonian in batches...")
+    print("Starting translation to Russian in batches...")
 
+    # 4. CHANGED: Column name to 'question_ru'
     translated_dataset = dataset.map(
-        lambda x: {'question_mkd': translate_batch_to_mkd(x['question'])},
+        lambda x: {'question_ru': translate_batch_to_ru(x['question'])},
         batched=True,
         batch_size=32
     )
     print("Translation complete.")
 
-    translated_dataset.save_to_disk('./lcquad2_mk')
+    # 5. CHANGED: Save path to lcquad2_ru
+    output_path = './lcquad2_ru'
+    translated_dataset.save_to_disk(output_path)
+    print(f"Dataset saved to {output_path}")
 
     return translated_dataset
 
@@ -73,4 +77,5 @@ if __name__ == '__main__':
     print("\nFinal Dataset Columns:", final_dataset.column_names)
 
     print("\n--- SAMPLE OF TRANSLATED DATASET (First 3 Rows) ---")
-    print(final_dataset.select(range(3)).to_pandas())
+    # Prints the English question alongside the Russian translation
+    print(final_dataset.select(range(3)).to_pandas()[['question', 'question_ru', 'sparql_wikidata']])

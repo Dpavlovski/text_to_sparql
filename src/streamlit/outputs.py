@@ -234,7 +234,7 @@ def main():
     # 🔧 PATH CONFIGURATION
     # ==============================
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    rel_path = "../../results/benchmark/sparql_outputs_en_v3_FINAL_ANALYSIS.csv"
+    rel_path = "../../results/benchmark/sparql_outputs_en_v2-2_FINAL_ANALYSIS.csv"
     FILE_PATH = os.path.abspath(os.path.join(script_dir, rel_path))
     # ==============================
 

@@ -7,7 +7,6 @@ import aiohttp
 import requests
 
 from src.http_client.session import get_session
-from src.wikidata.prefixes import PREFIXES
 
 USER_AGENT = "MyWikidataBot/1.0 (my-project-url.com; dimitar.pavlovski@students.finki.ukim.mk)"
 
@@ -102,10 +101,9 @@ async def execute_sparql_query(query: str, retries: int = 3, delay: int = 5) -> 
     session = get_session()
 
     endpoint_url = "https://query.wikidata.org/sparql"
-    full_query = PREFIXES + query
 
     params = {
-        "query": full_query,
+        "query": query,
         "format": "json"
     }
 
@@ -151,8 +149,8 @@ async def execute_sparql_query(query: str, retries: int = 3, delay: int = 5) -> 
     return None
 
 
-print(asyncio.run(execute_sparql_query(
-    'SELECT ?person ?personLabel WHERE { wd:Q761383 wdt:P138 ?person . SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } }')))
+# print(asyncio.run(execute_sparql_query(
+#     'SELECT ?person ?personLabel WHERE { wd:Q761383 wdt:P138 ?person . SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } }')))
 
 HEADERS = {
     'User-Agent': 'RatioAnalysisScript/1.0 (mailto:user@example.com)'

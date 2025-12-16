@@ -9,7 +9,7 @@ class BenchmarkConfig:
     """
 
     _COLLECTION_TEMPLATES = {
-        "labels": "wikidata_labels_{lang}",
+        "labels": "qald_10_labels",
         "few_shot": "lcquad2_0_{lang}"
     }
 
@@ -19,7 +19,7 @@ class BenchmarkConfig:
 
     @staticmethod
     def validate_language(lang: str):
-        valid_langs = ["en", "mk", "es", "de", "fr"]
+        valid_langs = ["en", "mk", "zh", "de", "ru"]
         if lang not in valid_langs:
             raise ValueError(f"Language '{lang}' is not supported. Supported: {valid_langs}")
 

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import uuid
 
@@ -12,11 +13,11 @@ async def embed_few_shot_examples():
     logging.basicConfig(level=logging.INFO)
     logging.info("Starting the embedding process...")
 
-    dataset = load_from_disk("../../dataset/lcquad2_mk")
+    dataset = load_from_disk("../../dataset/lcquad2_ru")
     logging.info(f"Dataset loaded with {len(dataset)} records.")
 
     for row in tqdm(dataset, desc="Embedding and upserting records"):
-        question = row.get("question_mkd")
+        question = row.get("question_ru")
         sparql_query = row.get("sparql_wikidata")
 
         if not question or not sparql_query:
@@ -27,7 +28,7 @@ async def embed_few_shot_examples():
             vector = embed_value(question)
             await qdrant_db.upsert_record(
                 vector=vector,
-                collection_name="lcquad2_0_mk",
+                collection_name="lcquad2_0_ru",
                 unique_id=str(uuid.uuid4()),
                 payload={"answer": sparql_query, "value": question}
             )
@@ -36,5 +37,6 @@ async def embed_few_shot_examples():
 
     logging.info("Embedding process completed successfully.")
 
-# if __name__ == "__main__":
-#     asyncio.run(embed_few_shot_examples())
+
+if __name__ == "__main__":
+    asyncio.run(embed_few_shot_examples())
