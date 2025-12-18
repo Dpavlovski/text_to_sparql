@@ -20,7 +20,7 @@ from src.wikidata.api import get_wikidata_labels
 
 tools = [generate_sparql, validate_results]
 tools_by_name = {tool.name: tool for tool in tools}
-llm = llm_provider.get_model("gpt-4.1-mini")
+llm = llm_provider.get_model("nvidia/nemotron-3-nano-30b-a3b:free")
 llm_with_tools = llm.bind_tools(tools)
 
 

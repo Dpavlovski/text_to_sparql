@@ -13,7 +13,7 @@ from src.databases.qdrant.qdrant import qdrant_db
 from src.dataset.qald_10 import load_qald_json
 from src.http_client.session import close_session
 
-TARGET_LANGUAGE = "zh"
+TARGET_LANGUAGE = "en"
 
 CSV_HEADER = [
     "original_question",
@@ -72,7 +72,7 @@ async def main():
         print(f"Configuration Error: {e}")
         return
 
-    csv_file_name = f'../results/benchmark/sparql_outputs_{config.language}_v4.csv'
+    csv_file_name = f'../results/benchmark/sparql_outputs_{config.language}_nemotron-3-nano-30b-a3.csv'
     file_exists = os.path.exists(csv_file_name)
 
     with open(csv_file_name, 'a', newline='', encoding='utf-8') as f:
@@ -87,7 +87,7 @@ async def main():
         sparql_agent = create_sparql_agent()
         print("Agent compiled successfully. Starting processing...")
 
-        for item in tqdm(benchmark_data, desc="Benchmarking"):
+        for item in tqdm(benchmark_data[:], desc="Benchmarking"):
             await process_question_and_write_attempts(
                 item,
                 sparql_agent,

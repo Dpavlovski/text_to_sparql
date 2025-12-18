@@ -35,11 +35,13 @@ async def get_sparql_query(
         candidates=candidates,
     )
 
-    llm = llm_provider.get_model("gpt-4.1-mini")
-    structured_llm = llm.with_structured_output(SparqlGenerationResponse)
+    llm = llm_provider.get_model("nvidia/nemotron-3-nano-30b-a3b:free")
+    structured_llm = llm.with_structured_output(SparqlGenerationResponse, method="json_mode",
+                                                include_raw=True)
 
     try:
-        generation: SparqlGenerationResponse = await structured_llm.ainvoke(sparql_prompt)
+        response: SparqlGenerationResponse = await structured_llm.ainvoke(sparql_prompt)
+        generation = response['parsed']
     except Exception as e:
         return {"sparql": "", "results": [], "error": f"LLM Generation Error: {e}"}
 
