@@ -72,7 +72,7 @@ async def main():
         print(f"Configuration Error: {e}")
         return
 
-    csv_file_name = f'../results/benchmark/sparql_outputs_{config.language}_nemotron-3-nano-30b-a3.csv'
+    csv_file_name = f'../results/benchmark/sparql_outputs_{config.language}_test.csv'
     file_exists = os.path.exists(csv_file_name)
 
     with open(csv_file_name, 'a', newline='', encoding='utf-8') as f:

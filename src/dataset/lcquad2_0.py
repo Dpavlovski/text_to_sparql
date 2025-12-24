@@ -65,7 +65,7 @@ def get_translated_and_embedded_dataset():
     print("Translation complete.")
 
     # 5. CHANGED: Save path to lcquad2_ru
-    output_path = './lcquad2_ru'
+    output_path = '../../lcquad2_ru'
     translated_dataset.save_to_disk(output_path)
     print(f"Dataset saved to {output_path}")
 

@@ -1,4 +1,21 @@
 services:
+  app:
+    build: .
+    container_name: sparql_agent
+    ports:
+      - "8501:8501"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+    volumes:
+      - ./results:/app/results
+      - ./qald_10_with_mk.json:/app/qald_10_with_mk.json
+    depends_on:
+      - qdrant
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
   qdrant:
     image: qdrant/qdrant:latest
     container_name: qdrant-container
@@ -7,43 +24,6 @@ services:
     volumes:
       - qdrant_storage:/qdrant/storage
 
-
-  mongodb:
-    image: mongo:latest
-    container_name: mongodb
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: example
-
-  mongo-express:
-    image: mongo-express:latest
-    container_name: mongo-express
-    ports:
-      - "8081:8081"
-    environment:
-      ME_CONFIG_MONGODB_ADMINUSERNAME: root
-      ME_CONFIG_MONGODB_ADMINPASSWORD: example
-      ME_CONFIG_MONGODB_SERVER: mongodb
-
-  qendpoint-wikidata:
-    image: qacompany/qendpoint-wikidata
-    container_name: qendpoint-wikidata-all
-    environment:
-      - MEM_SIZE=50G
-      - HDT_BASE=wikidata_all
-    command: [ "java","-jar","-Xmx8g","qendpoint.jar" ]
-    ports:
-      - "1234:1234"
-    volumes:
-      - qendpoint_data:/data/qendpoint/hdt-store
-    restart: unless-stopped
-
 volumes:
   qdrant_storage:
     external: true
-  mongo_data:
-  qendpoint_data:

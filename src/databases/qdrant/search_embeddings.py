@@ -76,7 +76,6 @@ async def get_candidates(
     candidates_map: Dict[str, List[Dict[str, Any]]] = {}
 
     for i, keyword in enumerate(valid_keywords):
-        #
         q_res = qdrant_results_per_keyword[i] if i < len(qdrant_results_per_keyword) else []
 
         w_res_raw = wikidata_results_per_keyword[i] if i < len(wikidata_results_per_keyword) else []

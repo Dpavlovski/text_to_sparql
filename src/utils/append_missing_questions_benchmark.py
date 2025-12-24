@@ -6,9 +6,9 @@ import pandas as pd
 # ================= CONFIGURATION =================
 # Update these paths to match your project
 JSON_PATH = "../../qald_10_with_mk.json"
-CSV_PATH = "../../results/benchmark/with_neighbors/sparql_outputs_en_nemotron-3-nano-30b-a3.csv"
+CSV_PATH = "../../results/benchmark/with_neighbors/sparql_outputs_ru_nemotron-3-nano-30b-a3.csv"
 OUTPUT_PATH = CSV_PATH  # Overwrite the file, or change name to save separately
-TARGET_LANG = "en"
+TARGET_LANG = "ru"
 
 
 # =================================================
