@@ -34,7 +34,7 @@ async def process_question_and_write_attempts(
         language: str,
 ):
     """Streams the agent's execution and writes each tool attempt to the CSV."""
-    question = item["question"]
+    question = "Which country was Bill Gates born in?"  # item["question"]
 
     initial_state = {
         "messages": [HumanMessage(content=sparql_agent_instruction.format(user_task=question))],
@@ -72,7 +72,7 @@ async def main():
         print(f"Configuration Error: {e}")
         return
 
-    csv_file_name = f'../results/benchmark/sparql_outputs_{config.language}_test.csv'
+    csv_file_name = f'../results/benchmark/{config.language}.csv'
     file_exists = os.path.exists(csv_file_name)
 
     with open(csv_file_name, 'a', newline='', encoding='utf-8') as f:

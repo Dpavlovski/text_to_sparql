@@ -2,7 +2,7 @@ import pandas as pd
 
 # ================= CONFIGURATION =================
 # Path to your CSV file
-INPUT_CSV = "sparql_outputs_en.csv"
+INPUT_CSV = "en_gpt-4.1-mini.csv"
 OUTPUT_CSV = INPUT_CSV  # Overwrite the file (or change name to save copy)
 
 

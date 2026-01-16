@@ -59,8 +59,8 @@ def gerbil_eval(csv_filename: str, json_filename: str):
 
 def transform_entry(idx: int, row: dict, null_values: set):
     question = row.get('original_question', None)
-    sparql = row.get('gold_query', None)
-    results = row.get('gold_result', None)
+    sparql = row.get('generated_query', None)
+    results = row.get('result', None)
 
     entry = {
         "id": idx,
@@ -94,4 +94,4 @@ def transform_entry(idx: int, row: dict, null_values: set):
 
 
 if __name__ == '__main__':
-    gerbil_eval('../benchmark/with_neighbors/sparql_outputs_en_gpt-4.1-mini.csv', 'test_gold.json')
+    gerbil_eval('../benchmark/with_neighbors/processed/en_gpt-4.1-mini.csv', 'sparql_outputs_en.json')

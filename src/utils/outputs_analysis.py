@@ -307,10 +307,10 @@ class AnalysisPipeline:
 
 
 if __name__ == "__main__":
-    GENERATED_CSV = "../../results/benchmark/with_neighbors/sparql_outputs_ru_nemotron-3-nano-30b-a3.csv"
+    GENERATED_CSV = "../../results/benchmark/with_neighbors/sparql_outputs_de_nemotron-3-nano-30b-a3_raw.csv"
     QALD_JSON = "../../qald_10_with_mk.json"
-    OUTPUT_CSV = "../../results/benchmark/with_neighbors/sparql_outputs_ru_nemotron-3-nano-30b-a3_with_analysis.csv"
-    LANGUAGE = "ru"
+    OUTPUT_CSV = "../../results/benchmark/with_neighbors/de_nemotron-3-nano-30b-a3.csv"
+    LANGUAGE = "de"
 
     if Path(GENERATED_CSV).exists() and Path(QALD_JSON).exists():
         pipeline = AnalysisPipeline(GENERATED_CSV, QALD_JSON, LANGUAGE)

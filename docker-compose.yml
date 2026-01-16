@@ -1,29 +1,21 @@
+version: '3.8'
+
 services:
-  app:
-    build: .
-    container_name: sparql_agent
-    ports:
-      - "8501:8501"
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - QDRANT_HOST=qdrant
-      - QDRANT_PORT=6333
-    volumes:
-      - ./results:/app/results
-      - ./qald_10_with_mk.json:/app/qald_10_with_mk.json
-    depends_on:
-      - qdrant
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
   qdrant:
     image: qdrant/qdrant:latest
-    container_name: qdrant-container
     ports:
       - "6333:6333"
     volumes:
-      - qdrant_storage:/qdrant/storage
+      - ./qdrant_storage:/qdrant/storage
 
-volumes:
-  qdrant_storage:
-    external: true
+  streamlit-app:
+    build: .
+    ports:
+      - "8501:8501"
+    environment:
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      # Add your API Keys here or use a .env file locally
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    depends_on:
+      - qdrant

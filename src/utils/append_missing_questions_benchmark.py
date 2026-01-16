@@ -4,11 +4,10 @@ from pathlib import Path
 import pandas as pd
 
 # ================= CONFIGURATION =================
-# Update these paths to match your project
 JSON_PATH = "../../qald_10_with_mk.json"
-CSV_PATH = "../../results/benchmark/with_neighbors/sparql_outputs_ru_nemotron-3-nano-30b-a3.csv"
-OUTPUT_PATH = CSV_PATH  # Overwrite the file, or change name to save separately
-TARGET_LANG = "ru"
+CSV_PATH = "../../results/benchmark/with_neighbors/processed/en_gpt-4.1-mini.csv"
+OUTPUT_PATH = CSV_PATH
+TARGET_LANG = "en"
 
 
 # =================================================
@@ -22,7 +21,7 @@ def fix_missing_rows_keep_attempts():
         print(f"❌ Error loading JSON: {e}")
         return
 
-    # 1. Extract the "Gold Standard" order of questions
+    # 1. Extract the "Gold Standard" questions
     qald_questions = data.get('questions', data) if isinstance(data, dict) else data
     expected_data = []
 
@@ -36,7 +35,6 @@ def fix_missing_rows_keep_attempts():
                 break
 
         if q_text:
-            # We add a 'sort_order' to force the final result to match JSON order
             expected_data.append({
                 "original_question": q_text,
                 "json_sort_order": i
@@ -52,46 +50,47 @@ def fix_missing_rows_keep_attempts():
 
     df_csv = pd.read_csv(CSV_PATH)
 
-    # Normalize string to ensure matching
+    # Ensure string matching works
     df_csv['original_question'] = df_csv['original_question'].astype(str).str.strip()
 
-    # --- CRITICAL CHANGE: DO NOT DROP DUPLICATES ---
-    # We want to keep every attempt.
-    print(f"   Found {len(df_csv)} rows (attempts) in CSV.")
+    print(f"   Found {len(df_csv)} rows in CSV.")
 
-    # 3. Merge
-    # A Left Merge on the JSON list will keep the JSON order.
-    # If the CSV has 3 rows for Question 1, this merge will produce 3 rows in the result.
-    # If the CSV has 0 rows for Question 2, this merge will produce 1 row (with NaNs).
+    # 3. Merge with INDICATOR
     print("🔄 Merging to find gaps...")
 
     df_final = pd.merge(
         df_expected,
         df_csv,
         on='original_question',
-        how='left'
+        how='left',
+        indicator=True
     )
 
-    # 4. Fill Missing Rows
-    # Identify rows that were created by the merge but had no data in CSV
-    # We check 'generated_query' (or 'result') being NaN
-    missing_mask = df_final['generated_query'].isna()
-    missing_count = missing_mask.sum()
+    # 4. Identify Truly Missing Rows
+    truly_missing_mask = df_final['_merge'] == 'left_only'
+    missing_count = truly_missing_mask.sum()
+
+    # --- CRITICAL FIX: DELETE THE CATEGORICAL COLUMN NOW ---
+    # We must remove '_merge' before doing any fillna operations
+    del df_final['_merge']
 
     if missing_count > 0:
-        print(f"⚠️  Found {missing_count} missing questions (filling placeholders)...")
+        print(f"⚠️  Found {missing_count} TRULY missing questions (adding placeholders)...")
 
-        df_final.loc[missing_mask, 'result'] = "MISSING_IN_LOG"
-        df_final.loc[missing_mask, 'generated_query'] = "ERROR: Script crashed or skipped"
-        # Optional: Fill other columns with empty strings to look cleaner
-        df_final.loc[missing_mask, 'candidates'] = ""
-        df_final.loc[missing_mask, 'ner'] = ""
+        cols_to_fix = ['generated_query', 'result', 'candidates', 'ner']
+        for col in cols_to_fix:
+            if col not in df_final.columns:
+                df_final[col] = ""
+            # Safely set the missing rows to empty strings
+            df_final.loc[truly_missing_mask, col] = ""
     else:
-        print("✅ No missing questions found.")
+        print("✅ No missing questions found (Structure is complete).")
 
-    # 5. Cleanup
+    # 5. Cleanup remaining NaNs safely
     if 'json_sort_order' in df_final.columns:
         del df_final['json_sort_order']
+
+    df_final = df_final.fillna("")
 
     # 6. Save
     df_final.to_csv(OUTPUT_PATH, index=False)

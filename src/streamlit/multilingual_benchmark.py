@@ -5,12 +5,14 @@ from pathlib import Path
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+
 import streamlit as st
 
 # ================= CONFIGURATION =================
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 # Navigate: src/dashboard/ -> src/ -> root/ -> results/benchmark/with_neighbors
-RESULTS_DIR = os.path.abspath(os.path.join(CURRENT_DIR, "..", "..", "results", "benchmark", "with_neighbors"))
+RESULTS_DIR = os.path.abspath(
+    os.path.join(CURRENT_DIR, "..", "..", "results", "benchmark", "with_neighbors", "processed"))
 
 # --- MANUAL GERBIL SCORES ---
 GERBIL_DATA = [
@@ -18,7 +20,10 @@ GERBIL_DATA = [
     {"model": "gpt-4.1-mini", "language": "de", "Gerbil F1": 0.2340},
     {"model": "gpt-4.1-mini", "language": "zh", "Gerbil F1": 0.2288},
     {"model": "gpt-4.1-mini", "language": "ru", "Gerbil F1": 0.2257},
-    {"model": "nemotron-3-nano-30b-a3", "language": "en", "Gerbil F1": 0.3416}
+    {"model": "nemotron-3-nano-30b-a3", "language": "en", "Gerbil F1": 0.3416},
+    {"model": "nemotron-3-nano-30b-a3", "language": "de", "Gerbil F1": 0.2836},
+    {"model": "nemotron-3-nano-30b-a3", "language": "zh", "Gerbil F1": 0.1082},
+    {"model": "nemotron-3-nano-30b-a3", "language": "ru", "Gerbil F1": 0.2834}
 ]
 # =================================================
 
@@ -33,7 +38,7 @@ def parse_filename(filename):
     model = "unknown"
 
     for p in parts:
-        if len(p) == 2 and p in ['en', 'de', 'ru', 'zh', 'mk', 'fr', 'es']:
+        if len(p) == 2 and p in ['en', 'de', 'ru', 'zh']:
             lang = p
             break
 

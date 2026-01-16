@@ -71,30 +71,23 @@ def safe_parse_structure(x):
         pass
     return x
 
-
 def load_data_grouped(file_path):
     if not os.path.exists(file_path):
         return None, f"File not found at: {file_path}", None
     try:
         df = pd.read_csv(file_path)
-
-        # Normalize metrics for filtering
         cols_to_float = ['res_f1', 'id_match_score', 'keyword_match_ratio']
         for col in cols_to_float:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
-
         for col in ['messages', 'log_data']:
             if col in df.columns:
                 df[col] = df[col].apply(safe_parse_structure)
-
         records = df.to_dict('records')
         grouped = defaultdict(list)
         for r in records:
             q_text = r.get('original_question', 'Unknown Question')
             grouped[q_text].append(r)
-
-        # Return dataframe too for easier filtering logic if needed later
         return grouped, None, df
     except Exception as e:
         return None, str(e), None
@@ -213,61 +206,69 @@ def filter_questions(grouped_data, f1_range, id_range, status_types):
 # --- Main Logic ---
 
 def main():
-    st.title("🔎 SPARQL Agent Analysis")
+    st.title("🔎 Individual Question Analysis")
 
-    # ==============================
+    # --- 1. SETUP DIRECTORY (Dynamic Discovery) ---
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    rel_path = "../../results/benchmark/with_neighbors/sparql_outputs_en_gpt-4.1-mini.csv"
-    FILE_PATH = os.path.abspath(os.path.join(script_dir, rel_path))
-    # ==============================
+    results_dir = os.path.abspath(os.path.join(script_dir, "../../results/benchmark/with_neighbors/processed"))
 
+    if not os.path.exists(results_dir):
+        st.error(f"Results directory not found: {results_dir}")
+        return
+
+    # List all CSVs in the target folder
+    csv_files = sorted([f for f in os.listdir(results_dir) if f.endswith('.csv')])
+
+    if not csv_files:
+        st.warning("No CSV result files found in the directory.")
+        return
+
+    # --- 2. SIDEBAR FILE SELECTION ---
+    with st.sidebar:
+        st.header("📂 Data Source")
+        selected_filename = st.selectbox(
+            "Select file to analyze:",
+            csv_files,
+            index=0,
+            help="Only files in this list will be used for individual analysis."
+        )
+        st.divider()
+
+    # Construct full path
+    FILE_PATH = os.path.join(results_dir, selected_filename)
+
+    # --- 3. LOAD DATA FOR THE SELECTED FILE ---
     grouped_data, error_msg, _ = load_data_grouped(FILE_PATH)
+
     if grouped_data is None:
         st.error(error_msg)
-        st.stop()
+        return
 
-    # --- Sidebar Filters ---
+    # --- 4. SIDEBAR FILTERS (Apply to the selected data) ---
     with st.sidebar:
         st.header("🎯 Filters")
-
-        # F1 Score Slider
         f1_range = st.slider("F1 Score Range", 0.0, 1.0, (0.0, 1.0), step=0.1)
-
-        # Entity Linking Slider
         id_range = st.slider("Entity ID Score Range", 0.0, 1.0, (0.0, 1.0), step=0.1)
-
-        # Status Multiselect
         status_opts = ["Correct", "Wrong Answer", "Error/Empty"]
         status_filter = st.multiselect("Result Status", status_opts, default=status_opts)
 
-        # Apply Filter
         filtered_questions = filter_questions(grouped_data, f1_range, id_range, status_filter)
-
         st.divider()
         st.write(f"Showing **{len(filtered_questions)}** / {len(grouped_data)} questions")
 
-        # Navigation
         if 'current_q_idx' not in st.session_state: st.session_state.current_q_idx = 0
-
-        # Reset index if filter changes drastically reducing count
         if st.session_state.current_q_idx >= len(filtered_questions):
             st.session_state.current_q_idx = 0
 
         if len(filtered_questions) > 0:
-            selected_idx = st.number_input(
-                "Jump to Index (in filtered list)",
-                min_value=1,
-                max_value=len(filtered_questions),
-                value=st.session_state.current_q_idx + 1
-            )
-            if selected_idx - 1 != st.session_state.current_q_idx:
-                st.session_state.current_q_idx = selected_idx - 1
-                st.rerun()
+            selected_idx = st.number_input("Jump to Index", 1, len(filtered_questions),
+                                           st.session_state.current_q_idx + 1)
+            st.session_state.current_q_idx = selected_idx - 1
         else:
             st.warning("No questions match filters!")
-            st.stop()
+            return
 
-    # --- Navigation Logic ---
+    # --- 5. NAVIGATION BUTTONS ---
     def next_q():
         st.session_state.current_q_idx = min(len(filtered_questions) - 1, st.session_state.current_q_idx + 1)
 
@@ -278,12 +279,13 @@ def main():
     c1.button("⬅️ Prev", on_click=prev_q, use_container_width=True)
     c3.button("Next ➡️", on_click=next_q, use_container_width=True)
 
+    # --- 6. PRESENT ANALYSIS ---
     current_q_text = filtered_questions[st.session_state.current_q_idx]
     runs = grouped_data[current_q_text]
 
     with c2:
         st.markdown(
-            f"<h4 style='text-align: center; margin:0;'>{st.session_state.current_q_idx + 1} / {len(filtered_questions)}</h4>",
+            f"<h4 style='text-align: center;'>{st.session_state.current_q_idx + 1} / {len(filtered_questions)}</h4>",
             unsafe_allow_html=True)
         st.progress((st.session_state.current_q_idx + 1) / len(filtered_questions))
 
@@ -295,43 +297,27 @@ def main():
     for i, tab in enumerate(tabs):
         with tab:
             record = runs[i]
-            render_metrics(record)
+            render_metrics(record)  # Shows F1, ID Match, etc.
 
-            # 2. QUERY COMPARISON
             with st.expander("⚔️ Queries & Results", expanded=True):
-                # ROW 1: GOLD
                 st.markdown("<span class='gold-header'>🏆 Gold Standard</span>", unsafe_allow_html=True)
-                raw_gold = record.get('gold_query', '# Not provided')
-                clean_gold = clean_sparql_prefixes(raw_gold)
-                st.code(clean_gold, language='sparql')
-                gold_res = record.get('gold_result', 'None')
+                st.code(clean_sparql_prefixes(record.get('gold_query', '# N/A')), language='sparql')
                 st.markdown(f"**Expected Result:**")
-                st.markdown(f"<div class='result-box'>{gold_res}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='result-box'>{record.get('gold_result', 'None')}</div>",
+                            unsafe_allow_html=True)
 
-                st.markdown("---")
+                st.divider()
 
-                # ROW 2: GENERATED
                 st.markdown("<span class='gen-header'>🤖 Generated</span>", unsafe_allow_html=True)
-                raw_gen = record.get('generated_query', '# Not generated')
-                clean_gen = clean_sparql_prefixes(raw_gen)
-                st.code(clean_gen, language='sparql')
-                gen_res = record.get('result', 'None')
+                st.code(clean_sparql_prefixes(record.get('generated_query', '# N/A')), language='sparql')
                 st.markdown(f"**Actual Result:**")
-                st.markdown(f"<div class='result-box'>{gen_res}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='result-box'>{record.get('result', 'None')}</div>", unsafe_allow_html=True)
 
-            # 3. ANALYSIS
             render_comparison_section("🆔 Wikidata ID Analysis", record.get('gold_wikidata_ids', []),
                                       record.get('candidate_ids', []))
-            render_comparison_section("🔑 Keyword Analysis", record.get('gold_keywords', []),
-                                      record.get('generated_keywords', []))
 
-            # 4. CONTEXT
-            with st.expander("🌍 Retrieved Context (Candidates & Neighbors)", expanded=False):
-                st.markdown(record.get('candidates', 'No candidates found.'))
-
-            # 5. RAW JSON
-            with st.expander("📊 View Raw JSON Data"):
-                st.json(record)
+            with st.expander("🌍 Retrieved Context", expanded=False):
+                st.markdown(record.get('candidates', 'No context.'))
 
 
 if __name__ == "__main__":
