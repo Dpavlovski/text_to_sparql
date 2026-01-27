@@ -1,21 +1,16 @@
-version: '3.8'
-
 services:
   qdrant:
     image: qdrant/qdrant:latest
+    container_name: qdrant
     ports:
       - "6333:6333"
     volumes:
       - ./qdrant_storage:/qdrant/storage
 
-  streamlit-app:
-    build: .
+  text-to-sparql:
+    image: dimitarpavlovski/text_to_sparql:latest
+    container_name: text-to-sparql
     ports:
       - "8501:8501"
-    environment:
-      - QDRANT_HOST=qdrant
-      - QDRANT_PORT=6333
-      # Add your API Keys here or use a .env file locally
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
     depends_on:
       - qdrant
