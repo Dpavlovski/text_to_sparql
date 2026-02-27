@@ -13,7 +13,7 @@ async def embed_few_shot_examples():
     logging.basicConfig(level=logging.INFO)
     logging.info("Starting the embedding process...")
 
-    dataset = load_from_disk("../../../lcquad2_ru")
+    dataset = load_from_disk("../../../lcquad_collections/lcquad2_ru")
     logging.info(f"Dataset loaded with {len(dataset)} records.")
 
     for row in tqdm(dataset, desc="Embedding and upserting records"):

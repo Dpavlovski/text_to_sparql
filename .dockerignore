@@ -42,7 +42,7 @@ docker-compose.yml
 .dockerignore
 
 # Dataset cache
-lcquad2_de/
-lcquad2_mk/
-lcquad2_ru/
-lcquad2_zh/
+lcquad_collections/lcquad2_de/
+lcquad_collections/lcquad2_mk/
+lcquad_collections/lcquad2_ru/
+lcquad_collections/lcquad2_zh/
