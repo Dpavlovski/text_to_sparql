@@ -2,7 +2,7 @@
 name = "text-to-sparql"
 version = "0.1.0"
 description = "A system that translates natural language questions into SPARQL queries."
-authors = ["Dimitar Pavlovski <dimitar.pavlovski12@gmail.com>"]
+authors = ["author <author>"]
 license = "MIT"
 readme = "README.md"
 

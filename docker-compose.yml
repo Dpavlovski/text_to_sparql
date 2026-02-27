@@ -8,7 +8,7 @@ services:
       - ./qdrant_storage:/qdrant/storage
 
   text-to-sparql:
-    image: dimitarpavlovski/text_to_sparql:latest
+    image: author/text_to_sparql:latest
     container_name: text-to-sparql
     ports:
       - "8501:8501"

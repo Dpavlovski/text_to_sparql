@@ -8,7 +8,7 @@ import requests
 
 from src.http_client.session import get_session
 
-USER_AGENT = "MyWikidataBot/1.0 (my-project-url.com; dimitar.pavlovski@students.finki.ukim.mk)"
+USER_AGENT = "MyWikidataBot/1.0 (my-project-url.com; author)"
 
 _last_request_time = 0
 MIN_DELAY = 1.0
