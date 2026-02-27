@@ -1,91 +1,130 @@
 # Text-to-SPARQL Project
 
-This project aims to build a system that translates natural language questions into SPARQL queries and evaluates their correctness using the QALD (Question Answering over Linked Data) dataset. The system supports querying Wikidata and integrates various modules for natural language processing, SPARQL generation, and result evaluation.
+A system that translates natural language questions into SPARQL queries and evaluates them against the QALD (Question
+Answering over Linked Data) dataset. The project integrates LLMs (via LangChain and LangGraph), vector databases (
+Qdrant), and Wikidata to provide accurate SPARQL generation and entity/relation linking.
 
 ## Features
 
-- **QALD Data**cted results from the QALD JSON dataset.**set Parsing**: Extracts questions, SPARQL queries, and expe
-- **Entity and Relation Linking**: Identifies entities and relations in the question using Named Entity Recognition (NER) and links them to Wikidata items and properties.
-- **Enititis and Relations**: are searched on Wikidata endpoint for finding the most similar.
-- **SPARQL Query Generation**: Generates SPARQL queries based on extracted entities, relations, and question templates.
-- **Result Evaluation**: Compares generated results with ground truth results to assess the correctness of the query.
-- **Database Integration**: Saves and retrieves benchmark results to/from a MongoDB database.
+- **Multi-step SPARQL Generation**: Uses a LangGraph-based agent to rephrase questions, extract entities/relations, and
+  generate queries.
+- **Entity and Relation Linking**: Identifies entities and relations using NER and links them to Wikidata items and
+  properties using vector search.
+- **QALD Dataset Support**: Built-in support for QALD-10 benchmarks (English, Chinese, German, Russian, etc.).
+- **Vector Database Integration**: Uses Qdrant for storing and searching Wikidata labels and descriptions.
+- **Streamlit Dashboard**: Interactive UI for testing the agent, analyzing outputs, and viewing benchmarks.
+- **Evaluation Pipeline**: Compares generated SPARQL results with ground truth to assess correctness.
+- **Dockerized Infrastructure**: Easily deployable with Docker and Docker Compose.
+
+## Tech Stack
+
+- **Language**: Python 3.13+
+- **Frameworks**: LangChain, LangGraph, Streamlit
+- **Package Manager**: Poetry
+- **Databases**:
+  - **Qdrant**: Vector database for entity/relation linking.
+- **External APIs**: Wikidata SPARQL Endpoint, OpenRouter/OpenAI/Ollama for LLMs.
 
 ## Requirements
 
-- **Python 3.8+**
-- Poetry
-- Docker
+- Python 3.13+
+- [Poetry](https://python-poetry.org/docs/#installation)
+- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/)
+
+## Setup
+
+### 1. Environment Variables
+
+Create a `.env` file in the root directory based on the following template (see `.env` for examples):
+
+```env
+# LLM Configuration
+CHAT_MODEL=openai # or ollama, openrouter
+OPENAI_API_KEY=your_key
+OPENAI_MODEL=gpt-4.1-mini
+
+# Qdrant Configuration
+QDRANT_HOST=localhost
+QDRANT_PORT=6333
+
+# Other APIs
+=OPENROUTER_API_KEY=your_openrouter_key
+```
+
+### 2. Installation
+
+```bash
+# Install dependencies
+poetry install
+```
+
+### 3. Run Infrastructure
+
+```bash
+# Start Qdrant and the application using Docker Compose
+docker-compose up -d
+```
 
 ## Usage
 
-### 1. Load QALD Dataset
+### Streamlit Dashboard
 
-The `load_qald_json()` function extracts questions, SPARQL queries, and expected results from the QALD dataset:
-
-```python
-from src.dataset.qald_10 import load_qald_json
-
-benchmark_data = load_qald_json()
-print(benchmark_data)
-```
-
-### 2. Run Evaluation
-
-The `test_on_qald_10()` function processes the benchmark data, generates SPARQL queries, and evaluates their correctness:
-
-```python
-from src.main import test_on_qald_10
-
-benchmark_data = load_qald_json()
-test_on_qald_10(benchmark_data)
-```
-
-### 3. MongoDB Integration
-
-Results are automatically saved to MongoDB in the `text-to-sparql` collection. Verify entries using a MongoDB client:
+The main interface for the project is a Streamlit app:
 
 ```bash
-mongo
-use text_to_sparql
-db.getCollection('text-to-sparql').find()
+poetry run streamlit run src/streamlit/app.py
+```
+
+This provides:
+
+- **Chat Agent**: Interactive natural language to SPARQL interface.
+- **Output Analysis**: Tools for analyzing generated queries.
+- **Benchmarks**: Visualization of performance on datasets.
+
+### Running Benchmarks
+
+To run the benchmark script directly:
+
+```bash
+poetry run python src/main.py
+```
+
+*Note: Ensure Qdrant is running and populated before running benchmarks.*
+
+### Data Population
+
+To insert Wikidata labels into Qdrant:
+
+```bash
+poetry run python src/databases/qdrant/insert_wikidata_labels.py
 ```
 
 ## Project Structure
 
 - `src/`
-  - `databases/`: Handles MongoDB interactions and entity/relation searches.
-  - `dataset/`: Contains dataset parsing logic.
-  - `main.py`: Entry point for testing and integration.
-  - `utils/`: Contains utility functions for formatting and processing results.
-  - `wikidata/`: Interfaces with the Wikidata API for entity and relation linking.
+  - `agent/`: LangGraph agent definition, prompts, and state management.
+  - `databases/`: Qdrant interaction logic.
+  - `dataset/`: Parsers for QALD and LC-QuAD datasets.
+  - `llm/`: LLM provider wrappers and embedding logic.
+  - `streamlit/`: Streamlit multipage application.
+  - `tools/`: Tools used by the SPARQL agent (NER, SPARQL execution, etc.).
+  - `wikidata/`: Wikidata API clients and dump processing scripts.
+- `results/`: Benchmark outputs, analysis files, and GERBIL evaluation results.
+- `qdrant_storage/`: Local storage for Qdrant data.
 
-## Example Workflow
+## Scripts
 
-1. Load the QALD dataset.
-2. Perform entity and relation linking using NER.
-3. Generate SPARQL queries and fetch results from Wikidata.
-4. Compare the generated results with ground truth results.
-5. Save results and evaluation metrics to MongoDB.
+- `src/main.py`: Main entry point for running benchmarks.
+- `src/databases/qdrant/insert_wikidata_labels.py`: Populates Qdrant with Wikidata labels.
+- `src/wikidata/dump_processing/preprocess_dump.py`: Scripts for processing Wikidata JSON dumps.
 
-## Troubleshooting
+## License
 
-### MongoDB Connection Error
-
-- Ensure MongoDB is running and accessible.
-- Verify the connection string in `MongoDBDatabase`.
-
-### Invalid SPARQL Queries
-
-- Check the entity and relation linking results.
-- Verify SPARQL query templates in `perform_multi_querying_with_ranking()`.
-
-## Contributing
-
-Contributions are welcome! Please fork the repository and submit a pull request with your changes.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
-- QALD Dataset: [https://qald.aksw.org/](https://qald.aksw.org/)
-- Wikidata: [https://www.wikidata.org/](https://www.wikidata.org/)
+- **QALD Dataset**: [https://qald.aksw.org/](https://qald.aksw.org/)
+- **Wikidata**: [https://www.wikidata.org/](https://www.wikidata.org/)
+- **LangChain/LangGraph**: [https://www.langchain.com/](https://www.langchain.com/)
 

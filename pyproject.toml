@@ -1,8 +1,9 @@
 [tool.poetry]
 name = "text-to-sparql"
 version = "0.1.0"
-description = ""
+description = "A system that translates natural language questions into SPARQL queries."
 authors = ["Dimitar Pavlovski <dimitar.pavlovski12@gmail.com>"]
+license = "MIT"
 readme = "README.md"
 
 [tool.poetry.dependencies]
