@@ -22,3 +22,9 @@ data/*
 
 .venv
 
+*.csv
+*.json
+*.jsonl
+
+lcquad_collections/*
+qdrant_storage/*
