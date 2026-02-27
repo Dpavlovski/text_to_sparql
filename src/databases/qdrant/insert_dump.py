@@ -8,7 +8,7 @@ from typing import List, Tuple
 from qdrant_client import models
 from tqdm import tqdm
 
-from src.databases.qdrant.qdrant import QdrantDatabase
+from src.databases.qdrant.qdrant import qdrant_db
 from src.llm.embed_labels import EmbeddingModel
 
 BATCH_SIZE = 128
@@ -19,7 +19,7 @@ NUM_WORKERS = 16
 
 class Processor:
     def __init__(self):
-        self.db = QdrantDatabase()
+        self.db = qdrant_db
         self.embedder = EmbeddingModel()
         self._init_collection()
 

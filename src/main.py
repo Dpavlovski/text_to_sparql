@@ -1,183 +1,108 @@
-from typing import List, Dict
+import asyncio
+import csv
+import os
+from typing import Any
 
-from qdrant_client.http.models import ScoredPoint
+from langchain_core.messages import HumanMessage
+from tqdm import tqdm
 
-from src.databases.qdrant.search_embeddings import extract_search_objects
-from src.templates.ner import ner_template
-from src.templates.sparql import sparql_template
-from src.templates.zero_shot_sparql import zero_shot_sparql
-from src.utils.format_examples import format_examples
-from src.utils.format_results import format_results
-from src.utils.json__extraction import get_json_response
-from src.wikidata.api import execute_sparql_query, search_wikidata
+from src.agent.graph import create_sparql_agent
+from src.agent.prompts import sparql_agent_instruction
+from src.config.config import BenchmarkConfig
+from src.databases.qdrant.qdrant import qdrant_db
+from src.dataset.qald_10 import load_qald_json
+from src.http_client.session import close_session
 
+TARGET_LANGUAGE = "en"
 
-def get_ner_results(question: str) -> dict:
-    return get_json_response(
-        ner_template(question),
-        list_name="labels",
-        system_message="You are a Wikidata entity extraction assistant."
-    )
-
-
-def get_neighbors(node_id: str, hops: int = 1, limit: int = 5, direction: str = "both") -> List[Dict]:
-    if not node_id.upper().startswith(("Q", "P")):
-        raise ValueError("Invalid node ID. Must start with Q or P")
-
-    wd_entity = f"wd:{node_id.upper()}"
-
-    direction_filters = []
-    if direction in ("out", "both"):
-        direction_filters.append(f"?node ?p ?neighbor .")
-    if direction in ("in", "both"):
-        direction_filters.append(f"?neighbor ?p ?node .")
-
-    query = f"""
-        SELECT DISTINCT ?neighbor
-        WHERE {{
-            VALUES ?node {{ {wd_entity} }}
-
-            {{
-                ?node {" ?p1 ?neighbor1 . " if hops >= 1 else ""}
-                {" ?neighbor1 ?p2 ?neighbor2 . " if hops >= 2 else ""}
-                {" ?neighbor2 ?p3 ?neighbor3 . " if hops >= 3 else ""}
-            }}
-            BIND({f"?neighbor{hops}" if hops > 0 else "?node"} AS ?neighbor)
-            FILTER(?neighbor != {wd_entity}) 
-        }}
-        LIMIT {limit}
-    """
-
-    results = execute_sparql_query(query)
-    return results
+CSV_HEADER = [
+    "original_question",
+    "rephrased_question",
+    "ner",
+    "candidates",
+    "examples",
+    "generated_query",
+    "result",
+    "time"
+]
 
 
-def get_sparql(question: str, examples: List[ScoredPoint], entity_descriptions, relations_descriptions) -> dict:
-    sparql_prompt = sparql_template(question, examples, entity_descriptions, relations_descriptions)
+async def process_question_and_write_attempts(
+        item: dict[str, Any],
+        agent,
+        csv_writer,
+        language: str,
+):
+    """Streams the agent's execution and writes each tool attempt to the CSV."""
+    question = "Which country was Bill Gates born in?"  # item["question"]
 
-    return get_json_response(sparql_prompt, list_name="sparql",
-                             system_message="You are a SPARQL query generator.")["sparql"]
-
-
-def perform_multi_querying_with_ranking(question, examples, entity_descriptions, relations_descriptions, ):
-    sparql_query = None
-    for i in range(5):
-        try:
-            sparql_query = get_sparql(question, examples, entity_descriptions, relations_descriptions)
-            print(f"Query {i + 1}: {sparql_query}")
-
-            results = execute_sparql_query(sparql_query)
-
-            if results is not None:
-                return sparql_query, results
-            else:
-                print("No results found.")
-        except Exception as e:
-            print(f"Error during query {i + 1}: {e}")
-
-    return sparql_query, None
-
-
-def text_to_sparql(question):
-    answers = []
-    query = None
-    initial_sparql = None
-    initial_result = None
+    initial_state = {
+        "messages": [HumanMessage(content=sparql_agent_instruction.format(user_task=question))],
+        "original_question": question,
+        "attempts": 0,
+        "log_data": [],
+        "language": language
+    }
 
     try:
-        print("Initial attempt to generate sparql query with zero-shot.")
-        initial_sparql = get_json_response(zero_shot_sparql(question), list_name="sparql",
-                                           system_message="You are a SPARQL query generator.")["sparql"]
-        print(initial_sparql)
-        initial_result = execute_sparql_query(initial_sparql)
+        async for step in agent.astream(initial_state):
+            if "tool_executor" in step:
+                state = step["tool_executor"]
+
+                new_logs = state.get("log_data", [])
+
+                for log_entry in new_logs:
+                    if log_entry:
+                        row = [log_entry.get(h, "") for h in CSV_HEADER]
+                        csv_writer.writerow(row)
+
     except Exception as e:
-        print(f"Error during query: {e}")
-
-    if initial_result is not None:
-        print("Query:")
-        print(initial_sparql)
-        print("Result:")
-        if isinstance(initial_result, list):
-            for row in initial_result:
-                for value in row:
-                    print(value)
-                    answers.append(value)
-                print()
-        elif isinstance(initial_result, bool):
-            print(initial_result)
-            return initial_sparql, initial_result
-        return initial_sparql, answers
-
-    else:
-        examples = extract_search_objects(question, collection_name="lcquad2_0")
-
-        tries = 3
-        for i in range(tries):
-            print("\nEntering pipeline...")
-            print(f"Attempt {i + 1}/{tries} to generate and execute SPARQL query.")
-
-            try:
-                ner_results = get_ner_results(question)
-                print("NER results:")
-                print(ner_results)
-                print("\nDFSL Examples:")
-                print(format_examples(examples))
-
-                entities = [result['wikidata_label'] for result in ner_results["nodes"] if
-                            result['wikidata_type'] == "item"]
-                relations = [result['wikidata_label'] for result in ner_results["nodes"] if
-                             result['wikidata_type'] == "property"]
-
-                entity_results = search_wikidata(entities, "item")
-                relation_results = search_wikidata(relations, "property")
-
-                entity_descriptions, relations_descriptions = format_results(entity_results, relation_results)
-
-                print("\nSearch Wikidata for similar entities:")
-                print(f"Entity Description: {entity_descriptions}")
-                print(f"Relation Description: {relations_descriptions}")
-                print("\nGenerated SPARQL Queries:")
-                query, result = perform_multi_querying_with_ranking(
-                    question, examples, entity_descriptions, relations_descriptions
-                )
-
-                answers = []
-
-                if isinstance(result, list):
-                    print("\nSelected Query:")
-                    print(query)
-                    print("\nResults:")
-
-                    for row in result:
-                        for value in row:
-                            answer = value
-                            print(answer)
-                            answers.append(answer)
-                        print()
-
-                    return query, answers
-
-                elif isinstance(result, bool):
-                    print("Selected Query:")
-                    print(query)
-                    print("\nResult:")
-                    print(result)
-
-                    return query, [result]
-
-            except Exception as e:
-                print(f"An error occurred during attempt {i + 1}: {e}")
-
-        else:
-            print("All attempts failed. No valid SPARQL query returned results.")
-            return query, []
+        print(f"\nCaught a streaming error for question '{question}': {e}")
+        error_row = {"original_question": question, "result": f"STREAMING FAILED: {e}"}
+        row = [error_row.get(h, "") for h in CSV_HEADER]
+        csv_writer.writerow(row)
 
 
-def main():
-    question = "Which country was Bill Gates born in?"
+async def main():
+    try:
+        config = BenchmarkConfig(TARGET_LANGUAGE)
+        print(f"Starting benchmark for language: {config.language.upper()}")
+        print(f"Using label collection: {config.get_collection_name('labels')}")
+    except ValueError as e:
+        print(f"Configuration Error: {e}")
+        return
 
-    text_to_sparql(question)
+    csv_file_name = f'../results/benchmark/{config.language}.csv'
+    file_exists = os.path.exists(csv_file_name)
+
+    with open(csv_file_name, 'a', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+
+        if not file_exists:
+            writer.writerow(CSV_HEADER)
+
+        benchmark_data = load_qald_json(lang=config.language)
+
+        print("Compiling the SPARQL agent...")
+        sparql_agent = create_sparql_agent()
+        print("Agent compiled successfully. Starting processing...")
+
+        for item in tqdm(benchmark_data[:], desc="Benchmarking"):
+            await process_question_and_write_attempts(
+                item,
+                sparql_agent,
+                writer,
+                language=config.language
+            )
+
+    print(f"\n\nSCRIPT FINISHED. Results are in '{csv_file_name}'.")
+
+    try:
+        await qdrant_db.client.close()
+        await close_session()
+    except Exception as e:
+        print(f"Error during cleanup: {e}")
 
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    asyncio.run(main())

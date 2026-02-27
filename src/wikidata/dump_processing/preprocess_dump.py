@@ -24,7 +24,6 @@ def get_arg_parser():
 
 def main(args):
     start = time.time()
-    print(f"ARGS: {args}")
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(exist_ok=True, parents=True)
@@ -39,7 +38,6 @@ def main(args):
     else:
         total_num_lines = args.num_lines_in_dump
 
-    print("Starting processes")
     maxsize = 10 * args.processes
     output_queue = Queue(maxsize=maxsize)
     work_queue = Queue(maxsize=maxsize)

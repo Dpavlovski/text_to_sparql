@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Poetry
+.venv/
+env/
+venv/
+
+# Git
+.git/
+.gitignore
+.idea/
+.vscode/
+.jbeval/
+
+# Raw Wikidata Dumps and Processing intermediates
+*.bz2
+*.gz
+*.jsonl
+src/wikidata/dump_processing/data_processed/
+
+# IDE
+.idea/
+.jbeval/
+
+# Environment
+.env
+
+# Documentation
+README.md
+
+results/benchmark/embedding_models
+results/benchmark/models
+results/gerbil
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Dataset cache
+lcquad2_de/
+lcquad2_mk/
+lcquad2_ru/
+lcquad2_zh/
