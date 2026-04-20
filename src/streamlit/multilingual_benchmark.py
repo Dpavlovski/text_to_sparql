@@ -66,7 +66,8 @@ def load_data():
     for f in all_files:
         try:
             df = pd.read_csv(f)
-            if 'res_f1' not in df.columns:
+            # Make sure we load the standard metrics or the NER evaluation files
+            if 'keyword_match_ratio' not in df.columns and 'ner_f1' not in df.columns:
                 continue
             lang, model = parse_filename(f)
             df['language'] = lang
@@ -79,7 +80,9 @@ def load_data():
         return pd.DataFrame()
 
     full_df = pd.concat(combined_df, ignore_index=True)
-    numeric_cols = ['res_f1', 'id_match_score', 'keyword_match_ratio', 'time']
+
+    # ADDED NER METRICS HERE (Removed res_f1 from requirement)
+    numeric_cols = ['id_match_score', 'keyword_match_ratio', 'time', 'ner_precision', 'ner_recall', 'ner_f1']
     for col in numeric_cols:
         if col in full_df.columns:
             full_df[col] = pd.to_numeric(full_df[col], errors='coerce').fillna(0)
@@ -111,7 +114,6 @@ def main():
 
     # --- AGGREGATION ---
     agg_df = filtered_df.groupby(['model', 'language']).agg({
-        'res_f1': 'mean',
         'id_match_score': 'mean',
         'keyword_match_ratio': 'mean',
         'time': 'mean',
@@ -119,7 +121,6 @@ def main():
     }).reset_index()
 
     agg_df = agg_df.rename(columns={
-        'res_f1': 'Internal F1',
         'id_match_score': 'Entity Linking',
         'keyword_match_ratio': 'Keyword Match',
         'time': 'Avg Time (s)',
@@ -134,10 +135,10 @@ def main():
     # --- TOP ROW METRICS ---
     col1, col2, col3, col4 = st.columns(4)
     if not agg_df.empty:
-        best_idx = agg_df['Internal F1'].idxmax()
+        best_idx = agg_df['Gerbil F1'].idxmax()
         best_row = agg_df.loc[best_idx]
-        col1.metric("🏆 Top Performer (Internal)", f"{best_row['model']} ({best_row['language']})",
-                    f"F1: {best_row['Internal F1']:.3f}")
+        col1.metric("🏆 Top Performer (Gerbil F1)", f"{best_row['model']} ({best_row['language']})",
+                    f"F1: {best_row['Gerbil F1']:.3f}")
 
     col2.metric("Total Samples", len(filtered_df))
     col3.metric("Avg Latency", f"{filtered_df['time'].mean():.2f}s")
@@ -145,30 +146,21 @@ def main():
     success_mask = (filtered_df['result'].notna()) & (filtered_df['result'] != "[]") & \
                    (filtered_df['result'] != "") & (filtered_df['result'] != "MISSING_IN_LOG")
     success_rate = success_mask.sum() / len(filtered_df)
-    col4.metric("Success Rate", f"{success_rate:.1%}")
+    col4.metric("Success Rate (Returned Data)", f"{success_rate:.1%}")
 
     st.markdown("---")
 
     # --- TABS ---
-    tab1, tab2, tab3 = st.tabs(["📈 Comparison", "🔍 Detail View", "⚡ Performance"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📈 Comparison", "🔍 Detail View", "⚡ Performance", "🧠 NER (English)"])
 
     with tab1:
         st.markdown("### 🏆 Result Accuracy")
 
-        # --- ROW 1: F1 Scores ---
-        r1_c1, r1_c2 = st.columns(2)
-
-        with r1_c1:
-            st.caption("Internal F1 (Calculated by our script)")
-            fig_f1 = px.bar(agg_df, x="language", y="Internal F1", color="model", barmode="group",
+        # --- ROW 1: Gerbil F1 Score ---
+        st.caption("Gerbil F1 (Official Benchmark)")
+        fig_gerbil = px.bar(agg_df, x="language", y="Gerbil F1", color="model", barmode="group",
                             text_auto='.2f', range_y=[0, 1.1])
-            st.plotly_chart(fig_f1, use_container_width=True)
-
-        with r1_c2:
-            st.caption("Gerbil F1 (Official Benchmark)")
-            fig_gerbil = px.bar(agg_df, x="language", y="Gerbil F1", color="model", barmode="group",
-                                text_auto='.2f', range_y=[0, 1.1])
-            st.plotly_chart(fig_gerbil, use_container_width=True)
+        st.plotly_chart(fig_gerbil, use_container_width=True)
 
         st.markdown("---")
         st.markdown("### 🧩 Component Analysis")
@@ -191,7 +183,7 @@ def main():
         # Radar Chart
         st.markdown("---")
         st.subheader("Metric Composition (Radar Chart)")
-        radar_cols = ['Internal F1', 'Gerbil F1', 'Entity Linking', 'Keyword Match']
+        radar_cols = ['Gerbil F1', 'Entity Linking', 'Keyword Match']
         fig_radar = go.Figure()
         for idx, row in agg_df.iterrows():
             fig_radar.add_trace(go.Scatterpolar(
@@ -205,9 +197,9 @@ def main():
 
     with tab2:
         st.subheader("Leaderboard")
-        style_df = agg_df.sort_values("Internal F1", ascending=False)
+        style_df = agg_df.sort_values("Gerbil F1", ascending=False)
         st.dataframe(
-            style_df.style.background_gradient(subset=['Internal F1', 'Gerbil F1', 'Entity Linking'], cmap="Greens"),
+            style_df.style.background_gradient(subset=['Gerbil F1', 'Entity Linking', 'Keyword Match'], cmap="Greens"),
             width="stretch"
         )
         with st.expander("See Raw Data"):
@@ -216,12 +208,80 @@ def main():
     with tab3:
         st.subheader("Time vs. Accuracy Tradeoff")
         fig_scat = px.scatter(
-            agg_df, x="Avg Time (s)", y="Internal F1",
+            agg_df, x="Avg Time (s)", y="Gerbil F1",
             color="model", symbol="language", size="Samples",
             hover_data=["model", "language"],
             title="Ideal: Top Left (High F1, Low Time)"
         )
         st.plotly_chart(fig_scat, use_container_width=True)
+
+    # --- NEW NER TAB ---
+    with tab4:
+        st.subheader("🧠 Semantic NER Evaluation (English Only)")
+        st.markdown(
+            "This tab visualizes the **LLM-as-a-Judge** evaluation, determining if the agent's extracted keywords "
+            "semantically match the canonical labels required by the Gold SPARQL."
+        )
+
+        if 'ner_f1' not in filtered_df.columns:
+            st.warning(
+                "No NER evaluation columns (`ner_f1`, `ner_precision`) found in the data. Did you run the LLM judge script?")
+        else:
+            # Filter specifically for English datasets that have NER data
+            ner_df = filtered_df[(filtered_df['language'] == 'en') & (filtered_df['ner_f1'] > 0)]
+
+            if ner_df.empty:
+                st.info(
+                    "No English LLM-as-a-Judge NER data loaded. Ensure your `en_ner_judged_f1.csv` is in the processed directory.")
+            else:
+                # Group metrics by model
+                ner_agg = ner_df.groupby('model').agg({
+                    'ner_precision': 'mean',
+                    'ner_recall': 'mean',
+                    'ner_f1': 'mean'
+                }).reset_index()
+
+                # Melt data for grouped bar chart
+                ner_melted = ner_agg.melt(
+                    id_vars='model',
+                    value_vars=['ner_precision', 'ner_recall', 'ner_f1'],
+                    var_name='Metric',
+                    value_name='Score'
+                )
+
+                # Rename metrics for clean display
+                ner_melted['Metric'] = ner_melted['Metric'].replace({
+                    'ner_precision': 'Precision (Cleanliness)',
+                    'ner_recall': 'Recall (Completeness)',
+                    'ner_f1': 'Macro F1'
+                })
+
+                # Plot
+                fig_ner = px.bar(
+                    ner_melted,
+                    x='model',
+                    y='Score',
+                    color='Metric',
+                    barmode='group',
+                    text_auto='.2f',
+                    range_y=[0, 1.1],
+                    title="Semantic Extraction Accuracy (EN Subset)",
+                    color_discrete_sequence=['#1f77b4', '#ff7f0e', '#2ca02c']  # Blue, Orange, Green
+                )
+                st.plotly_chart(fig_ner, use_container_width=True)
+
+                # Data Table
+                st.markdown("**Metric Summary**")
+                display_ner = ner_agg.rename(columns={
+                    'ner_precision': 'Precision (Cleanliness)',
+                    'ner_recall': 'Recall (Completeness)',
+                    'ner_f1': 'Macro F1'
+                })
+                st.dataframe(
+                    display_ner.style.background_gradient(
+                        subset=['Macro F1', 'Precision (Cleanliness)', 'Recall (Completeness)'], cmap="Blues"),
+                    width="stretch"
+                )
 
 
 if __name__ == "__main__":

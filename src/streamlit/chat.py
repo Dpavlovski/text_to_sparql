@@ -2,8 +2,6 @@ import os
 import re
 import sys
 
-from langchain_core.messages import ToolMessage
-
 # Fix path to allow importing 'src'
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
@@ -12,9 +10,15 @@ if project_root not in sys.path:
 
 import asyncio
 import streamlit as st
-from src.agent.graph import create_sparql_agent
+from langchain_core.messages import ToolMessage
 
-# ... rest of the streamlit code provided previously
+# Import the correct builder and dependencies
+from src.agent.builder import SparqlAgentBuilder
+from src.llm.llm_provider import LLMProvider
+from src.databases.qdrant.qdrant import QdrantDatabase
+from src.config.settings import settings
+from src.http_client.session import close_session
+
 # --- Page Config ---
 st.set_page_config(
     page_title="Wikidata SPARQL Agent",
@@ -36,10 +40,13 @@ st.markdown("""
 
 # --- Async Helper ---
 def run_async(coroutine):
-    """Helper to run async code in Streamlit"""
+    """Helper to run async code safely in Streamlit"""
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    return loop.run_until_complete(coroutine)
+    try:
+        return loop.run_until_complete(coroutine)
+    finally:
+        loop.close()
 
 
 # --- Sidebar: Graph Visualization ---
@@ -48,7 +55,11 @@ with st.sidebar:
 
     # Generate and display the graph image dynamically
     try:
-        app_graph = create_sparql_agent()
+        # We only need the structure to draw the graph, so Qdrant can be None here
+        llm_dummy = LLMProvider.get_model(settings.default_llm_model)
+        builder_dummy = SparqlAgentBuilder(llm_service=llm_dummy, qdrant_service=None)
+        app_graph = builder_dummy.compile()
+
         png_data = app_graph.get_graph().draw_mermaid_png()
         st.image(png_data, caption="LangGraph Workflow")
     except Exception as e:
@@ -81,8 +92,13 @@ for message in st.session_state.messages:
 
 # --- Logic to Process Query ---
 async def process_question(user_input):
-    # Initialize the compiled graph
-    app = create_sparql_agent()
+    # 1. Initialize dependencies INSIDE the async loop to prevent Event Loop mismatch errors
+    llm_service = LLMProvider.get_model(settings.default_llm_model)
+    qdrant_service = QdrantDatabase(host=settings.qdrant_host, port=settings.qdrant_port)
+
+    # 2. Compile the graph
+    builder = SparqlAgentBuilder(llm_service=llm_service, qdrant_service=qdrant_service)
+    app = builder.compile()
 
     initial_state = {
         "messages": [("user", user_input)],
@@ -93,53 +109,59 @@ async def process_question(user_input):
 
     # Container for streaming output
     status_container = st.status("Agent is thinking...", expanded=True)
-
     final_response = ""
 
-    # We use .astream to get updates node by node
-    async for output in app.astream(initial_state):
-        for node_name, state_update in output.items():
+    try:
+        # We use .astream to get updates node by node
+        async for output in app.astream(initial_state):
+            for node_name, state_update in output.items():
 
-            # --- 1. LLM Node Visualization ---
-            if node_name == "llm":
-                latest_msg = state_update["messages"][-1]
-                if latest_msg.tool_calls:
-                    status_container.write(f"🧠 **LLM decided:** Call tool `{latest_msg.tool_calls[0]['name']}`")
-                else:
-                    status_container.write("🧠 **LLM decided:** Final answer ready.")
-                    final_response = latest_msg.content
+                # --- LLM Node Visualization ---
+                if node_name == "llm":
+                    latest_msg = state_update["messages"][-1]
+                    if hasattr(latest_msg, "tool_calls") and latest_msg.tool_calls:
+                        status_container.write(f"🧠 **LLM decided:** Call tool `{latest_msg.tool_calls[0]['name']}`")
+                    else:
+                        status_container.write("🧠 **LLM decided:** Final answer ready.")
+                        final_response = latest_msg.content
 
-            # --- 2. Tool Executor Visualization ---
-            elif node_name == "tool_executor":
-                messages = state_update.get("messages", [])
-                for msg in messages:
-                    if isinstance(msg, ToolMessage):
-                        # Attempt to parse SPARQL from the tool output
-                        sparql_match = re.search(r"(SELECT|ASK|DESCRIBE|CONSTRUCT).*?(?=\s*$)", msg.content,
-                                                 re.DOTALL | re.IGNORECASE)
+                # --- Tool Executor Visualization ---
+                elif node_name == "tool_executor":
+                    messages = state_update.get("messages", [])
+                    for msg in messages:
+                        if isinstance(msg, ToolMessage):
+                            # Attempt to parse SPARQL from the tool output
+                            sparql_match = re.search(r"(SELECT|ASK|DESCRIBE|CONSTRUCT).*?(?=\s*$)", msg.content,
+                                                     re.DOTALL | re.IGNORECASE)
 
-                        if sparql_match:
-                            sparql_query = sparql_match.group(0)
-                            status_container.markdown(f"🛠️ **Generated SPARQL:**")
-                            status_container.code(sparql_query, language="sparql")
+                            if sparql_match:
+                                sparql_query = sparql_match.group(0)
+                                status_container.markdown(f"🛠️ **Generated SPARQL:**")
+                                status_container.code(sparql_query, language="sparql")
 
-                        if "returned no results" in msg.content:
-                            status_container.error("❌ Query returned no results. Retrying...")
-                        elif "Tool call failed" in msg.content:
-                            status_container.error(f"⚠️ Error: {msg.content}")
-                        else:
-                            status_container.success("✅ Tool executed successfully.")
+                            if "returned no results" in msg.content:
+                                status_container.error("❌ Query returned no results. Retrying...")
+                            elif "Tool call failed" in msg.content:
+                                status_container.error(f"⚠️ Error: {msg.content}")
+                            else:
+                                status_container.success("✅ Tool executed successfully.")
 
-            # --- 3. Validator Visualization ---
-            elif node_name == "validator":
-                messages = state_update.get("messages", [])
-                if messages and "Results are valid" in messages[0].content:
-                    status_container.info("⚖️ **Validation:** Results confirmed.")
-                else:
-                    status_container.warning("⚖️ **Validation:** Results rejected. Looping back...")
+                # --- Validator Visualization ---
+                elif node_name == "validator":
+                    messages = state_update.get("messages", [])
+                    if messages and "Results are valid" in messages[0].content or "validated and appear correct" in \
+                            messages[0].content:
+                        status_container.info("⚖️ **Validation:** Results confirmed.")
+                    else:
+                        status_container.warning("⚖️ **Validation:** Results rejected. Looping back...")
 
-    status_container.update(label="Processing Complete", state="complete", expanded=False)
-    return final_response, initial_state
+        status_container.update(label="Processing Complete", state="complete", expanded=False)
+        return final_response, initial_state
+
+    finally:
+        # Crucial Cleanup: Close async connections so they don't hang when Streamlit reruns
+        await qdrant_service.close()
+        await close_session()
 
 
 # --- User Input ---
@@ -151,7 +173,6 @@ if prompt := st.chat_input("Ex: What are the child companies of Google?"):
 
     # 2. Run Agent
     with st.chat_message("assistant"):
-        # We need a placeholder to stream the thought process
         try:
             response_text, final_state = run_async(process_question(prompt))
 

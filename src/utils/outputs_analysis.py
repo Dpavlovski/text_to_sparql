@@ -192,22 +192,40 @@ class AnalysisPipeline:
 
         self.fetch_all_labels(all_unique_ids)
 
-        # 3. Calculate ID Metrics (With Label Formatting)
+        # 3. Calculate BOTH Retrieval Recall AND Generation Precision
         def calc_id_metrics(row):
+            # 1. What was retrieved? (RAG Recall)
+            retrieved_candidates_str = str(row.get('candidates', ''))
+            retrieved_ids = SPARQLUtils.extract_ids_from_text(retrieved_candidates_str)
+
+            # 2. What was used? (LLM Precision)
             gen_query = str(row.get('generated_query', row.get('sparql', '')))
+            used_ids = SPARQLUtils.extract_ids_from_text(gen_query)
+
             gold_query = str(row.get('gold_query', ''))
-            gen_ids = SPARQLUtils.extract_ids_from_text(gen_query)
             gold_ids = SPARQLUtils.extract_ids_from_text(gold_query)
 
-            # Use formatted strings with labels
-            gen_ids_list = self.format_ids(gen_ids)
-            gold_ids_list = self.format_ids(gold_ids)
+            # Formatted lists for the UI
+            retrieved_list = self.format_ids(retrieved_ids)
+            used_list = self.format_ids(used_ids)
+            gold_list = self.format_ids(gold_ids)
 
-            if not gold_ids: return gen_ids_list, gold_ids_list, 0.0
-            matches = len(gen_ids.intersection(gold_ids))
-            return gen_ids_list, gold_ids_list, (matches / len(gold_ids))
+            # Math
+            if not gold_ids: return retrieved_list, used_list, gold_list, 0.0, 0.0
 
-        self.df[['candidate_ids', 'gold_wikidata_ids', 'id_match_score']] = self.df.apply(
+            # RAG Recall: Did we fetch the gold IDs?
+            retrieval_matches = len(retrieved_ids.intersection(gold_ids))
+            retrieval_recall = retrieval_matches / len(gold_ids)
+
+            # LLM Precision: Were the IDs used in the query actually the gold IDs?
+            used_matches = len(used_ids.intersection(gold_ids))
+            llm_precision = used_matches / len(used_ids) if used_ids else 0.0
+
+            return retrieved_list, used_list, gold_list, retrieval_recall, llm_precision
+
+        # Add the new columns to the dataframe
+        self.df[['retrieved_candidates', 'used_candidate_ids', 'gold_wikidata_ids', 'retrieval_recall_score',
+                 'llm_precision_score']] = self.df.apply(
             lambda r: pd.Series(calc_id_metrics(r)), axis=1
         )
 
@@ -307,10 +325,10 @@ class AnalysisPipeline:
 
 
 if __name__ == "__main__":
-    GENERATED_CSV = "../../results/benchmark/with_neighbors/sparql_outputs_de_nemotron-3-nano-30b-a3_raw.csv"
+    GENERATED_CSV = "../../results/benchmark/sparql_outputs_mk_with_analysis.csv"
     QALD_JSON = "../../qald_10_with_mk.json"
-    OUTPUT_CSV = "../../results/benchmark/with_neighbors/de_nemotron-3-nano-30b-a3.csv"
-    LANGUAGE = "de"
+    OUTPUT_CSV = "../../results/benchmark/sparql_outputs_mk_with_analysis_v2.csv"
+    LANGUAGE = "mk"
 
     if Path(GENERATED_CSV).exists() and Path(QALD_JSON).exists():
         pipeline = AnalysisPipeline(GENERATED_CSV, QALD_JSON, LANGUAGE)

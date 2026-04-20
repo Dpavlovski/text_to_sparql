@@ -2,7 +2,7 @@ from typing import List, Dict, Any
 
 import numpy as np
 
-from src.llm.embed_labels import embedder, embed_value
+from src.databases.qdrant.embed_labels import embedder, embed_value
 
 
 def rerank_candidates(

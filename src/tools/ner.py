@@ -3,14 +3,16 @@ from typing import List, Literal
 from pydantic import BaseModel, Field
 
 from src.agent.prompts import ner_prompt
-from src.llm.llm_provider import llm_provider
+from src.config.settings import settings
+from src.llm.llm_provider import LLMProvider
 
 
 class Keyword(BaseModel):
     value: str = Field(description="The extracted keyword or phrase.")
     type: Literal["item", "property"] = Field(description="The type of the keyword.")
     context: str = Field(
-        description="A short 3-5 word description of what this entity likely represents in the context of the question (e.g., 'mathematical concept', 'person', 'city').")
+        description="A short 3-5 word description of what this entity likely represents in the context of the question (e.g., 'mathematical concept', 'person', 'city')."
+    )
 
 
 class NERResponse(BaseModel):
@@ -20,5 +22,9 @@ class NERResponse(BaseModel):
 
 async def get_ner_result(question: str) -> NERResponse:
     formatted_prompt = ner_prompt.format(question=question)
-    structured_llm = llm_provider.get_model("kwaipilot/kat-coder-pro:free").with_structured_output(NERResponse)
+
+    # Use settings instead of hardcoding
+    llm = LLMProvider.get_model(settings.default_llm_model)
+    structured_llm = llm.with_structured_output(NERResponse)
+
     return await structured_llm.ainvoke(formatted_prompt)

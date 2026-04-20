@@ -1,25 +1,23 @@
 import re
-from typing import Any
+from typing import List
 
 from langchain_core.messages import ToolMessage
 
 from src.agent.state import AgentState
 
 
-async def extract_previous_queries(state: AgentState) -> list[Any]:
+async def extract_previous_queries(state: AgentState) -> List[str]:
     sparql_pattern = re.compile(
-        r"""\b(SELECT|ASK|CONSTRUCT|DESCRIBE)\b
-        .*?
-        (?<=})
-        """,
+        r"""\b(SELECT|ASK|CONSTRUCT|DESCRIBE)\b.*?(?<=})""",
         re.IGNORECASE | re.DOTALL | re.VERBOSE
     )
 
     previous_queries = []
-    for msg in state["messages"]:
+    # Because state is a Pydantic BaseModel, dot notation works perfectly:
+    for msg in state.messages:
         if isinstance(msg, ToolMessage):
             match = sparql_pattern.search(msg.content)
             if match:
-                sparql_query = match.group(0).strip()
-                previous_queries.append(sparql_query)
+                previous_queries.append(match.group(0).strip())
+
     return previous_queries

@@ -5,12 +5,16 @@ services:
     ports:
       - "6333:6333"
     volumes:
-      - ./qdrant_storage:/qdrant/storage
+      - qdrant_storage:/qdrant/storage
 
   text-to-sparql:
-    image: author/text_to_sparql:latest
+    image: dimitarpavlovski/text_to_sparql:latest
     container_name: text-to-sparql
     ports:
       - "8501:8501"
-    depends_on:
-      - qdrant
+    entrypoint: [ "streamlit", "run", "src/streamlit/outputs.py", "--server.port=8501", "--server.address=0.0.0.0" ]
+
+
+volumes:
+  qdrant_storage:
+    external: true

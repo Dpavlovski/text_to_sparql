@@ -3,7 +3,7 @@ from typing import List
 from tqdm import tqdm
 
 from src.llm.llm_provider import llm_provider
-from src.tools.ner import extract_entities, NERResponse
+from src.tools.ner import get_ner_result, NERResponse
 
 NER_MODELS_TO_BENCHMARK = [
     # "alibaba/tongyi-deepresearch-30b-a3b:free",
@@ -78,7 +78,7 @@ async def run_ner_benchmark():
         for question in tqdm(questions_to_test, desc=f"Model {model_identifier}"):
             try:
                 # Directly invoke the extract_entities function with the specific model
-                ner_response: NERResponse = await extract_entities(question, model_identifier)
+                ner_response: NERResponse = await get_ner_result(question)
                 ner_response_str = str(ner_response)  # Convert the Pydantic object to a string for CSV
 
             except Exception as e:

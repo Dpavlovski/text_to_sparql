@@ -2,15 +2,15 @@ import asyncio
 from typing import List, Any, Dict
 
 from src.config.config import BenchmarkConfig
-from src.databases.qdrant.qdrant import qdrant_db
-from src.llm.embed_labels import embed_value
+from src.databases.qdrant.embed_labels import embed_value
+from src.databases.qdrant.qdrant import QdrantDatabase
 from src.utils.format_examples import format_qa_sparql_examples
 from src.utils.map_candidates import map_candidates
 from src.utils.re_ranking import rerank_candidates
 from src.wikidata.api import search_wikidata
 
 
-async def fetch_similar_qa_pairs(question: str, lang: str):
+async def fetch_similar_qa_pairs(question: str, lang: str, qdrant_db: QdrantDatabase):
     """Fetches similar question-answer pairs using language-specific collection."""
     config = BenchmarkConfig(lang)
     collection_name = config.get_collection_name("few_shot")
@@ -30,7 +30,8 @@ async def fetch_similar_qa_pairs(question: str, lang: str):
 
 async def get_candidates(
         keywords: List[Dict[str, Any]],
-        lang: str
+        lang: str,
+        qdrant_db: QdrantDatabase
 ) -> Any:
     """
     Fetches entities via Qdrant (Semantic) and Wikidata API (Keyword).
