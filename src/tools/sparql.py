@@ -4,7 +4,7 @@ from loguru import logger
 from pydantic import BaseModel, Field
 from rdflib.plugins.sparql import prepareQuery
 
-from src.agent.prompts import sparql_prompt_template
+from src.agent.prompts import sparql_prompt_template, zero_shot_sparql_prompt_template
 from src.config.settings import settings
 from src.llm.llm_provider import LLMProvider
 from src.wikidata.api import execute_sparql_query
@@ -30,13 +30,21 @@ async def get_sparql_query(
         examples: str,
         candidates: str,
 ) -> Dict[str, Any]:
-    sparql_prompt = sparql_prompt_template.format(
-        examples=examples,
-        question=question,
-        candidates=candidates,
-    )
+    # --- DYNAMIC PROMPT SELECTION ---
+    # If candidates and examples are empty, we are in Zero-Shot mode!
+    if not candidates and not examples:
+        logger.debug("Using ZERO-SHOT prompt template.")
+        sparql_prompt = zero_shot_sparql_prompt_template.format(
+            question=question
+        )
+    else:
+        logger.debug("Using RAG prompt template.")
+        sparql_prompt = sparql_prompt_template.format(
+            examples=examples,
+            question=question,
+            candidates=candidates,
+        )
 
-    # Professional touch: Don't hardcode the model, use settings!
     llm = LLMProvider.get_model(settings.default_llm_model)
     structured_llm = llm.with_structured_output(SparqlGenerationResponse, method="json_mode", include_raw=True)
 

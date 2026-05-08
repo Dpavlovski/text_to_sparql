@@ -2,8 +2,8 @@ import ast
 import json
 from typing import Dict, List, Any
 
-from langchain_core.messages import AIMessage, BaseMessage, SystemMessage, ToolMessage
-from langgraph.constants import END
+from langchain_core.messages import AIMessage, BaseMessage, SystemMessage, ToolMessage, HumanMessage
+from langgraph.constants import END, START
 from langgraph.graph.state import CompiledStateGraph, StateGraph
 from loguru import logger
 
@@ -41,17 +41,18 @@ class SparqlAgentBuilder:
         return [generate_sparql, validate_results]
 
     async def retrieval_node(self, state: AgentState) -> Dict[str, Any]:
-        """Fetches NER keywords, Candidates from Qdrant, and Few-Shot Examples."""
+        """Fetches NER keywords, Candidates from Qdrant, and Few-Shot Examples based on MODE."""
         question = state.original_question
         attempts = state.attempts
         force_refresh = (attempts >= 2)
+        mode = state.mode
 
         ner_keywords = state.ner_keywords
         current_lang = state.language
 
-        # 1. Extract NER Keywords
+        # 1. Extract NER Keywords (We still run this to get the Language tag)
         if not ner_keywords or force_refresh:
-            logger.debug(f"Extracting NER keywords for question: '{question}' (Force Refresh: {force_refresh})")
+            logger.debug(f"Extracting NER keywords for question: '{question}'")
             try:
                 ner_result = await get_ner_result(question)
                 ner_keywords = [k.model_dump() for k in ner_result.keywords]
@@ -59,24 +60,30 @@ class SparqlAgentBuilder:
             except Exception as e:
                 logger.exception("NER Extraction Failed")
 
-        # 2. Retrieve Candidates (Semantic Search via Qdrant)
-        # Note: Pass self.qdrant_service here if you refactor get_candidates to accept it
-        candidates_map = await get_candidates(
-            ner_keywords,
-            lang=current_lang,
-            qdrant_db=self.qdrant_service
-        )
-        # 3. Graph Context Enrichment
-        await enrich_candidates(candidates_map)
-        candidates_str = format_candidates_clean(candidates_map)
+        # Set default empty contexts
+        candidates_str = "No graph context provided. Rely on your pre-trained knowledge."
+        examples = "No few-shot examples provided."
 
-        # 4. Fetch Few-Shot Examples
-        examples = await fetch_similar_qa_pairs(
-            question,
-            current_lang,
-            qdrant_db=self.qdrant_service  # <--- ADD THIS
-        )
-        logger.info(f"Retrieval complete. Found {len(candidates_map)} candidate groups.")
+        # 2 & 3. Retrieve Candidates and Subgraph (RAG Phase)
+        if mode in ["full"]:
+            logger.info("Mode allows Graph Context. Fetching from Wikidata API...")
+            candidates_map = await get_candidates(
+                ner_keywords,
+                lang=current_lang
+            )
+            await enrich_candidates(candidates_map)
+            candidates_str = format_candidates_clean(candidates_map)
+
+        # 4. Fetch Few-Shot Examples (In-Context Learning Phase)
+        if mode in ["full"]:
+            logger.info("Mode allows Few-Shot. Fetching from LC-QuAD...")
+            examples = await fetch_similar_qa_pairs(
+                question,
+                current_lang,
+                qdrant_db=self.qdrant_service
+            )
+
+        logger.info(f"Retrieval complete for mode: {mode.upper()}")
 
         return {
             "ner_keywords": ner_keywords,
@@ -165,7 +172,7 @@ class SparqlAgentBuilder:
             "current_results": observation.get("results") if isinstance(observation, dict) else None
         }
 
-    async def validation_node(self, state: AgentState) -> Dict[str, List[SystemMessage]]:
+    async def validation_node(self, state: AgentState) -> Dict[str, List[HumanMessage]]:
         """Validates the SPARQL query results using LLM-as-a-judge."""
         original_question = state.original_question
 
@@ -227,7 +234,7 @@ class SparqlAgentBuilder:
         if is_valid:
             logger.success("Results validated successfully.")
             return {
-                "messages": [SystemMessage(
+                "messages": [HumanMessage(
                     content="The SPARQL results have been validated and appear correct. Please formulate your final answer.")]
             }
         else:
@@ -238,7 +245,7 @@ class SparqlAgentBuilder:
                 f"Validator Feedback: {feedback_text}\n"
                 f"Please analyze the previous query and results, and generate a CORRECTED SPARQL query."
             )
-            return {"messages": [SystemMessage(content=content)]}
+            return {"messages": [HumanMessage(content=content)]}
 
     def should_continue(self, state: AgentState) -> str:
         """Determines the next edge path in the graph."""
@@ -246,7 +253,7 @@ class SparqlAgentBuilder:
         last_message = messages[-1]
 
         # Break infinite loops
-        if state.attempts >= 5:
+        if state.attempts >= 1:
             logger.warning("Max attempts reached. Forcing END.")
             return END
 
@@ -277,6 +284,14 @@ class SparqlAgentBuilder:
 
         return "continue"
 
+    def route_start(self, state: AgentState) -> str:
+        """Determines where the graph should start based on the mode."""
+        if state.mode == "zero_shot":
+            logger.info("Zero-shot mode detected. Bypassing retrieval node.")
+            return "llm"
+
+        return "retriever"
+
     def compile(self) -> CompiledStateGraph:
         """Compiles and returns the executable LangGraph."""
         logger.info("Compiling the Sparql Agent Graph...")
@@ -289,8 +304,16 @@ class SparqlAgentBuilder:
         workflow.add_node("tool_executor", self.tool_node)
         workflow.add_node("validator", self.validation_node)
 
-        # 2. Define Entry Point
-        workflow.set_entry_point("retriever")
+        # 2. Define Conditional Entry Point (START)
+        # REMOVE: workflow.set_entry_point("retriever")
+        workflow.add_conditional_edges(
+            START,
+            self.route_start,
+            {
+                "llm": "llm",
+                "retriever": "retriever"
+            }
+        )
 
         # 3. Define Standard Edges
         workflow.add_edge("retriever", "llm")
@@ -310,7 +333,8 @@ class SparqlAgentBuilder:
             self.should_continue,
             {
                 "validate": "validator",
-                "continue": "retriever",  # If it failed, retrieve fresh context and try again
+                # If zero_shot fails, loop back to LLM. Otherwise loop to retriever.
+                "continue": "llm" if "zero_shot" else "retriever",
                 END: END
             }
         )
@@ -319,7 +343,8 @@ class SparqlAgentBuilder:
             "validator",
             self.should_continue,
             {
-                "continue": "retriever",  # Loop back through retriever and LLM if validation failed
+                # If zero_shot fails validation, loop back to LLM. Otherwise loop to retriever.
+                "continue": "llm" if "zero_shot" else "retriever",
                 END: END,
             },
         )

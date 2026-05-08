@@ -128,3 +128,29 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Wikidata**: [https://www.wikidata.org/](https://www.wikidata.org/)
 - **LangChain/LangGraph**: [https://www.langchain.com/](https://www.langchain.com/)
 
+# Agentic Text-to-SPARQL - Supplemental Material
+
+This repository contains the source code, datasets, and execution logs for the paper submitted to ISWC 2026.
+
+## GERBIL QA Evaluation Links
+
+To ensure full reproducibility, below are the official GERBIL Experiment IDs for our evaluations (as reported in Table
+1):
+
+| Model           | Language     | Pipeline   | GERBIL Experiment ID                                         |
+|-----------------|--------------|------------|--------------------------------------------------------------|
+| GPT-4.1-mini    | German (DE)  | Full Agent | https://gerbil-qa.aksw.org/gerbil/experiment?id=202605080016 |
+| Nemotron-3-nano | German (DE)  | Full Agent | https://gerbil-qa.aksw.org/gerbil/experiment?id=202605080017 |
+| GPT-4.1-mini    | English (EN) | Full Agent | https://gerbil-qa.aksw.org/gerbil/experiment?id=202605080021 |
+| Nemotron-3-nano | English (EN) | Full Agent | https://gerbil-qa.aksw.org/gerbil/experiment?id=202605080019 |
+| Claude-opus-4-7 | English (EN) | Full Agent | https://gerbil-qa.aksw.org/gerbil/experiment?id=202605080020 |
+| Claude-opus-4-7 | English (EN) | Zero-Shot  | https://gerbil-qa.aksw.org/gerbil/experiment?id=202605080022 |
+| GPT-4.1-mini    | Russian (RU) | Full Agent | https://gerbil-qa.aksw.org/gerbil/experiment?id=202605080025 |
+| Nemotron-3-nano | Russian (RU) | Full Agent | https://gerbil-qa.aksw.org/gerbil/experiment?id=202605080026 |
+| GPT-4.1-mini    | Chinese (ZH) | Full Agent | https://gerbil-qa.aksw.org/gerbil/experiment?id=202605080030 |
+| Nemotron-3-nano | Chinese (ZH) | Full Agent | https://gerbil-qa.aksw.org/gerbil/experiment?id=202605080028 |
+
+## CSV Execution Traces
+
+The folder `results/` contains the full execution traces, including the generated SPARQL queries, JSON payloads, and
+LLM-as-a-Judge semantic evaluations.

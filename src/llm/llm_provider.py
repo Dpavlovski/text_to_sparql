@@ -1,4 +1,5 @@
-from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_anthropic import ChatAnthropic
+from langchain_core.language_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 from loguru import logger
 
@@ -17,6 +18,7 @@ class LLMProvider:
         """
         logger.info(f"Initializing LLM model: '{model_identifier}'")
 
+        # 1. OpenAI Models
         if model_identifier.startswith("gpt-") or model_identifier.startswith("o1-"):
             if not settings.openai_api_key:
                 logger.error("OPENAI_API_KEY not found in environment.")
@@ -28,6 +30,20 @@ class LLMProvider:
                 temperature=0.0,
             )
 
+        # 2. Anthropic Models (Claude)
+        elif model_identifier.startswith("claude-"):
+            if not settings.anthropic_api_key:
+                logger.error("ANTHROPIC_API_KEY not found in environment.")
+                raise ValueError("ANTHROPIC_API_KEY is required for Anthropic models.")
+
+            return ChatAnthropic(
+                api_key=settings.anthropic_api_key,
+                model_name=model_identifier,
+                timeout=None,
+                stop=None
+            )
+
+        # 3. OpenRouter Models (Local, Llama, Nemotron, etc.)
         elif "/" in model_identifier:
             if not settings.openrouter_api_key:
                 logger.error("OPENROUTER_API_KEY not found in environment.")

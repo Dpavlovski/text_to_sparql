@@ -23,6 +23,7 @@ st.markdown("""
     .chip-match { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; } 
     .chip-miss { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; } 
     .chip-extra { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; } 
+    .chip-neutral { background-color: #e9ecef; color: #495057; border: 1px solid #ced4da; } 
     .result-box {
         padding: 10px; border-radius: 5px; background-color: #f1f3f5; border: 1px solid #ced4da;
         font-family: monospace; font-size: 0.9em; white-space: pre-wrap; max-height: 150px; overflow-y: auto; margin-bottom: 15px;
@@ -52,7 +53,8 @@ def load_data_grouped(file_path):
         return None, f"File not found at: {file_path}", None
     try:
         df = pd.read_csv(file_path)
-        cols_to_float = ['res_f1', 'keyword_match_ratio', 'ner_f1', 'retrieval_recall_score', 'llm_precision_score']
+        cols_to_float = ['res_f1', 'keyword_match_ratio', 'ner_f1', 'retrieval_recall_score', 'llm_precision_score',
+                         'entity_linking_f1']
         for col in cols_to_float:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
@@ -69,50 +71,84 @@ def load_data_grouped(file_path):
         return None, str(e), None
 
 
-def parse_list_col(data):
-    if isinstance(data, list): return [str(x) for x in data]
-    if isinstance(data, str):
-        try:
-            parsed = ast.literal_eval(data)
-            if isinstance(parsed, list): return [str(x) for x in parsed]
-        except:
-            if "," in data and "[" not in data: return [x.strip() for x in data.split(",")]
-    return []
+def extract_chips(data_str):
+    """Safely extracts items from strings, ignoring commas inside labels."""
+    if not isinstance(data_str, str):
+        if isinstance(data_str, list): return [str(x) for x in data_str]
+        return []
+
+    try:
+        parsed = ast.literal_eval(data_str)
+        if isinstance(parsed, list): return [str(x) for x in parsed]
+    except:
+        pass
+
+    matches = re.findall(r'(.+?\([QP]\d+\))', data_str, re.IGNORECASE)
+    if matches:
+        return [m.strip() for m in matches]
+
+    return [x.strip().strip("'").strip('"') for x in data_str.split(",") if x.strip()]
 
 
+def extract_id_from_chip(chip_text):
+    """Extracts just the QID/PID for robust mathematical comparison."""
+    match = re.search(r'\b([QP]\d+)\b', chip_text, re.IGNORECASE)
+    return match.group(1).upper() if match else chip_text.strip().upper()
+
+
+# THIS IS THE FUNCTION THAT WAS MISSING!
 def clean_sparql_prefixes(query):
+    """Removes standard prefixes from SPARQL queries so they display cleanly in the UI."""
     if not isinstance(query, str): return str(query)
     return re.sub(r'PREFIX\s+\w+:\s+<[^>]+>\s*', '', query, flags=re.IGNORECASE).strip()
 
 
-def render_comparison_section(title, gold_list, gen_list, gold_title="🏆 Gold Standard", gen_title="🤖 Generated"):
+def render_comparison_section(title, gold_str, gen_str, gold_title="🏆 Gold Standard", gen_title="🤖 Generated"):
     st.markdown(f"#### {title}")
-    g_set = set([x.lower().strip() for x in parse_list_col(gold_list)])
 
-    parsed_gen = parse_list_col(gen_list)
-    clean_gen = []
-    for item in parsed_gen:
-        if "value=" in item:
-            match = re.search(r"value='(.*?)'", item)
-            clean_gen.append(match.group(1).lower().strip() if match else item.lower().strip())
-        else:
-            clean_gen.append(item.lower().strip())
-    gen_set = set(clean_gen)
+    gold_items = extract_chips(gold_str)
+    gen_items = extract_chips(gen_str)
 
-    matches = g_set.intersection(gen_set)
-    missed = g_set.difference(gen_set)
-    extras = gen_set.difference(g_set)
+    gold_dict = {extract_id_from_chip(x): x for x in gold_items if x}
+    gen_dict = {extract_id_from_chip(x): x for x in gen_items if x}
+
+    g_ids = set(gold_dict.keys())
+    gen_ids = set(gen_dict.keys())
+
+    matches = g_ids.intersection(gen_ids)
+    missed = g_ids.difference(gen_ids)
+    extras = gen_ids.difference(g_ids)
 
     c1, c2 = st.columns(2)
     with c1:
         st.markdown(f"**{gold_title}**")
-        html = "".join([f"<span class='chip chip-match'>{i}</span>" for i in matches])
-        html += "".join([f"<span class='chip chip-miss'>{i}</span>" for i in missed])
+        html = ""
+        for i in matches: html += f"<span class='chip chip-match'>{gold_dict[i]}</span>"
+        for i in missed: html += f"<span class='chip chip-miss'>{gold_dict[i]}</span>"
         st.markdown(html if html else "<span style='color:grey'>None</span>", unsafe_allow_html=True)
     with c2:
         st.markdown(f"**{gen_title}**")
-        html = "".join([f"<span class='chip chip-match'>{i}</span>" for i in matches])
-        html += "".join([f"<span class='chip chip-extra'>{i}</span>" for i in extras])
+        html = ""
+        for i in matches: html += f"<span class='chip chip-match'>{gen_dict[i]}</span>"
+        for i in extras: html += f"<span class='chip chip-extra'>{gen_dict[i]}</span>"
+        st.markdown(html if html else "<span style='color:grey'>None</span>", unsafe_allow_html=True)
+    st.divider()
+
+
+def render_ner_section(title, gold_str, gen_str):
+    """Renders NER text using neutral chips since semantic equivalence cannot be exact-string matched."""
+    st.markdown(f"#### {title}")
+    gold_items = extract_chips(gold_str)
+    gen_items = extract_chips(gen_str)
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**🎯 Required Semantic Concepts (from Gold)**")
+        html = "".join([f"<span class='chip chip-neutral'>{i}</span>" for i in gold_items if i])
+        st.markdown(html if html else "<span style='color:grey'>None</span>", unsafe_allow_html=True)
+    with c2:
+        st.markdown("**🤖 Extracted by Agent**")
+        html = "".join([f"<span class='chip chip-neutral'>{i}</span>" for i in gen_items if i])
         st.markdown(html if html else "<span style='color:grey'>None</span>", unsafe_allow_html=True)
     st.divider()
 
@@ -121,15 +157,15 @@ def render_metrics(record):
     f1 = float(record.get('res_f1', 0) or 0)
     ner_f1 = float(record.get('ner_f1', 0) or 0)
     rag_recall = float(record.get('retrieval_recall_score', 0) or 0)
-    llm_prec = float(record.get('llm_precision_score', 0) or 0)
+    el_f1 = float(record.get('entity_linking_f1', 0) or 0)
     kw_score = float(record.get('keyword_match_ratio', 0) or 0)
 
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.metric("Final F1", f"{f1:.2f}")
     c2.metric("NER Judge F1", f"{ner_f1:.2f}")
     c3.metric("RAG Recall", f"{rag_recall:.2f}")
-    c4.metric("LLM Precision", f"{llm_prec:.2f}")
-    c5.metric("Syntax", f"{kw_score:.2f}")
+    c4.metric("Entity Linking F1", f"{el_f1:.2f}")
+    c5.metric("Syntax Match", f"{kw_score:.2f}")
 
     status_bg = "#d4edda" if f1 == 1.0 else "#f8d7da"
     status_color = "#155724" if f1 == 1.0 else "#721c24"
@@ -142,35 +178,30 @@ def render_metrics(record):
     st.divider()
 
 
-# --- Advanced Filter Logic ---
 def filter_questions(grouped_data, filters):
     filtered = []
-
     for q_text, runs in grouped_data.items():
         last_run = runs[-1]
         f1 = float(last_run.get('res_f1', 0))
         ner_f1 = float(last_run.get('ner_f1', 0))
         rag_recall = float(last_run.get('retrieval_recall_score', 0))
-        llm_prec = float(last_run.get('llm_precision_score', 0))
+        el_f1 = float(last_run.get('entity_linking_f1', 0))
         result_text = str(last_run.get('result', ''))
 
-        # Standard Range Filters
         if not (filters['f1'][0] <= f1 <= filters['f1'][1]): continue
         if not (filters['ner'][0] <= ner_f1 <= filters['ner'][1]): continue
         if not (filters['rag'][0] <= rag_recall <= filters['rag'][1]): continue
-        if not (filters['llm'][0] <= llm_prec <= filters['llm'][1]): continue
+        if not (filters['el_f1'][0] <= el_f1 <= filters['el_f1'][1]): continue
 
-        # Status Filter
         status = "Error/Empty"
         if result_text and result_text not in ["[]", "nan", ""]:
             status = "Correct" if f1 == 1.0 else "Wrong Answer"
 
         if status not in filters['status']: continue
 
-        # Quick Diagnosis Presets
         preset = filters['preset']
         if preset == "RAG found it, LLM ignored it":
-            if not (rag_recall > 0.8 and llm_prec < 0.5): continue
+            if not (rag_recall > 0.8 and el_f1 < 0.5): continue
         elif preset == "NER failed completely":
             if not (ner_f1 < 0.3): continue
         elif preset == "Perfect NER, Failed RAG":
@@ -183,7 +214,6 @@ def filter_questions(grouped_data, filters):
     return filtered
 
 
-# --- Main Logic ---
 def main():
     st.title("🔎 Advanced Question Analysis")
 
@@ -211,11 +241,8 @@ def main():
         st.error(error_msg)
         return
 
-    # --- ADVANCED SIDEBAR FILTERS ---
     with st.sidebar:
         st.header("🎯 Advanced Filters")
-
-        # 1. Quick Presets (The "Aha!" buttons)
         preset = st.selectbox("⚡ Quick Diagnosis Presets", [
             "None",
             "RAG found it, LLM ignored it",
@@ -225,21 +252,18 @@ def main():
         ], help="Instantly find specific failure cascades.")
 
         st.divider()
-
-        # 2. Status
         status_opts = ["Correct", "Wrong Answer", "Error/Empty"]
         status_filter = st.multiselect("Result Status", status_opts, default=status_opts)
 
-        # 3. Sliders
         with st.expander("🎚️ Fine-Tune Metrics", expanded=False):
             f1_range = st.slider("Final F1 Score", 0.0, 1.0, (0.0, 1.0), 0.1)
             ner_range = st.slider("NER Judge F1", 0.0, 1.0, (0.0, 1.0), 0.1)
             rag_range = st.slider("RAG Recall (Did DB find it?)", 0.0, 1.0, (0.0, 1.0), 0.1)
-            llm_range = st.slider("LLM Precision (Did LLM use it?)", 0.0, 1.0, (0.0, 1.0), 0.1)
+            el_f1_range = st.slider("Entity Linking F1 (LLM Chosen IDs)", 0.0, 1.0, (0.0, 1.0), 0.1)
 
         filters = {
             'f1': f1_range, 'ner': ner_range, 'rag': rag_range,
-            'llm': llm_range, 'status': status_filter, 'preset': preset
+            'el_f1': el_f1_range, 'status': status_filter, 'preset': preset
         }
 
         filtered_questions = filter_questions(grouped_data, filters)
@@ -301,11 +325,9 @@ def main():
 
             if 'judge_gold_entities' in record and 'judge_agent_entities' in record and pd.notna(
                     record['judge_gold_entities']):
-                render_comparison_section("🧠 NER Extraction Analysis (LLM Judge)",
-                                          record.get('judge_gold_entities', []),
-                                          record.get('judge_agent_entities', []),
-                                          gold_title="🎯 Required Semantic Concepts",
-                                          gen_title="🤖 Extracted by Agent")
+                render_ner_section("🧠 NER Extraction Analysis (LLM Judge)",
+                                   record.get('judge_gold_entities', []),
+                                   record.get('judge_agent_entities', []))
                 judge_reasoning = record.get('judge_reasoning', '')
                 if pd.notna(judge_reasoning) and str(judge_reasoning).strip() != "":
                     st.info(f"**👨‍⚖️ Judge's Verdict:** {judge_reasoning}")

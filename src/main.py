@@ -40,13 +40,16 @@ async def process_question_and_write_attempts(
     """Streams the agent's execution and writes each tool attempt to the CSV."""
 
     question = item.get("question", "Unknown Question")
+    TEST_MODE = "full"
 
     initial_state = {
         "messages": [HumanMessage(content=sparql_agent_instruction.format(user_task=question))],
         "original_question": question,
         "attempts": 0,
         "log_data": [],
-        "language": language
+        "language": language,
+        "mode": TEST_MODE
+
     }
 
     try:
@@ -93,11 +96,11 @@ async def main():
         logger.success("Agent compiled successfully.")
 
         # 4. Prepare CSV Output
-        csv_file_name = f'../results/benchmark/{config.language}_v2.csv'
+        csv_file_name = f'../results/benchmark/{config.language}_opus_4.7_full.csv'
         os.makedirs(os.path.dirname(csv_file_name), exist_ok=True)
         file_exists = os.path.exists(csv_file_name)
 
-        benchmark_data = load_qald_json(lang=config.language)
+        benchmark_data = load_qald_json(lang=config.language)[1:]
 
         with open(csv_file_name, 'a', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)

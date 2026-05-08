@@ -1,5 +1,5 @@
 import operator
-from typing import Annotated, Any, Dict, List
+from typing import Annotated, Any, Dict, List, Literal
 
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, Field
@@ -15,6 +15,8 @@ class AgentState(BaseModel):
     attempts: int = Field(default=0)
     original_question: str
     language: str = Field(default="en")
+
+    mode: Literal["zero_shot", "full"] = Field(default="full")
 
     ner_keywords: List[Dict[str, Any]] = Field(default_factory=list)
     candidates: str = Field(default="")

@@ -6,17 +6,14 @@ from loguru import logger
 from pydantic import BaseModel, Field
 from tqdm import tqdm
 
-from src.config.settings import settings
-# FIX: Corrected LLMProvider import
 from src.llm.llm_provider import LLMProvider
+from utils.outputs_analysis import SPARQLUtils
+from wikidata.api import get_wikidata_labels
 
-# ================= CONFIGURATION =================
-INPUT_CSV = "../../results/benchmark/with_neighbors/processed/en_gpt-4.1-mini.csv"
-OUTPUT_CSV = "../../results/benchmark/with_neighbors/processed/en_ner_judged_f1.csv"
+INPUT_CSV = "../../results/benchmark/en_opus_4.7_full_analyzed.csv"
+OUTPUT_CSV = "../../results/benchmark/with_neighbors/processed/en_opus_4.7_full_analyzed_judged.csv"
 NER_COLUMN_NAME = "ner"
 
-
-# =================================================
 
 class ConceptMatch(BaseModel):
     gold_label: str = Field(description="The canonical label required by the Gold SPARQL (e.g., 'taxon').")
@@ -31,13 +28,11 @@ class NEREvaluation(BaseModel):
     judge_reasoning: str = Field(description="A brief 1-sentence justification.")
 
 
-# FIX: Use static method and settings
-llm = LLMProvider.get_model(settings.default_llm_model)
-structured_llm = llm.with_structured_output(NEREvaluation)
+llm = LLMProvider.get_model("gpt-4.1-mini")
+structured_llm = llm.with_structured_output(NEREvaluation.model_json_schema())
 
 judge_prompt = ChatPromptTemplate.from_messages([
     ("system", "You are an impartial, expert evaluator grading a Named Entity Recognition (NER) system..."),
-    # (Keep your prompt here)
     ("human",
      'User Question: "{question}"\nGold Labels: {gold_labels}\nAgent Extracted: "{ner_string}"\nMap the concepts.')
 ])
@@ -70,14 +65,28 @@ def evaluate_ner():
         if pd.isna(gold_sparql) or not gold_sparql.strip() or pd.isna(ner_string) or not ner_string.strip():
             continue
 
-        gold_labels_context = "..."  # (Keep your context fetching logic here)
+        gold_ids = SPARQLUtils.extract_ids_from_text(gold_sparql, ignore_structural=True)
 
+        if gold_ids:
+            labels_dict = get_wikidata_labels(list(gold_ids), language="en")
+
+            formatted_labels = []
+            for qid, label in labels_dict.items():
+                formatted_labels.append(f"'{label}' ({qid})")
+
+            gold_labels_context = ", ".join(formatted_labels)
+        else:
+            gold_labels_context = "No entities or properties required."
+
+        df.at[index, 'judge_gold_entities'] = gold_labels_context
+        df.at[index, 'judge_agent_entities'] = ner_string
         try:
-            result: NEREvaluation = judge_chain.invoke({
+            raw_dict = judge_chain.invoke({
                 "question": question, "gold_labels": gold_labels_context, "ner_string": ner_string
             })
 
-            # Calculate F1
+            result = NEREvaluation(**raw_dict)
+
             true_positives = sum(1 for m in result.concept_mappings if m.is_semantic_match)
             false_negatives = sum(1 for m in result.concept_mappings if not m.is_semantic_match)
             false_positives = len(result.hallucinated_keywords)
@@ -95,8 +104,8 @@ def evaluate_ner():
             df.at[index, 'judge_reasoning'] = result.judge_reasoning
 
             total_evaluated += 1
-            sum_p += p;
-            sum_r += r;
+            sum_p += p
+            sum_r += r
             sum_f1 += f1
 
         except Exception as e:
