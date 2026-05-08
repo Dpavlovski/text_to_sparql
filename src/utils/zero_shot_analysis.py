@@ -7,7 +7,6 @@ from typing import Set, Tuple, Dict, Any
 
 import pandas as pd
 
-# Import the label fetcher from your existing API module
 from src.wikidata.api import get_wikidata_labels
 
 
@@ -20,26 +19,13 @@ class SPARQLUtils:
         'values', 'service', 'bind', 'exists', 'not exists', 'minus', 'offset',
         'describe', 'construct', 'having', 'from', 'graph'
     }
-    STRUCTURAL_PIDS = {
-        'P31',  # instance of
-        'P279',  # subclass of
-    }
 
     @staticmethod
-    def extract_ids_from_text(text: str, ignore_structural: bool = False) -> Set[str]:
-        """
-        Extracts all unique Wikidata IDs (Q.../P...) from a SPARQL string.
-        If ignore_structural is True, structural predicates (like P31) are filtered out.
-        """
+    def extract_ids_from_text(text: str) -> Set[str]:
+        """Extracts all unique Wikidata IDs (Q.../P...) from a SPARQL string."""
         if not isinstance(text, str):
             return set()
-
-        found_ids = set(re.findall(r'\b([QP]\d+)\b', text))
-
-        if ignore_structural:
-            found_ids = {qid for qid in found_ids if qid not in SPARQLUtils.STRUCTURAL_PIDS}
-
-        return found_ids
+        return set(re.findall(r'\b([QP]\d+)\b', text))
 
     @staticmethod
     def extract_keywords(query: str) -> Set[str]:
@@ -137,13 +123,19 @@ def load_qald_json(json_path: str, lang: str = 'en') -> Dict[str, Dict[str, Any]
     return gold_map
 
 
-class AnalysisPipeline:
+class ZeroShotAnalysisPipeline:
+    """
+    Modified Analysis Pipeline specifically for Zero-Shot experiments.
+    It removes RAG/Candidate logic and purely evaluates what the LLM
+    guessed from its parametric memory.
+    """
+
     def __init__(self, generated_csv: str, qald_json: str, lang: str = 'en'):
         self.gen_path = Path(generated_csv)
         self.json_path = Path(qald_json)
         self.lang = lang
         self.df = pd.DataFrame()
-        self.label_cache = {}  # Cache to store fetched labels
+        self.label_cache = {}
 
     def fetch_all_labels(self, all_ids: Set[str]):
         """Fetches labels for all unique IDs found in the dataset."""
@@ -151,12 +143,8 @@ class AnalysisPipeline:
         if not all_ids:
             return
 
-        # Convert to list for the API function
         ids_list = list(all_ids)
-
         try:
-            # Assumes get_wikidata_labels handles chunking (50 IDs limit) internally
-            # If your get_wikidata_labels is strictly for list->dict, this works directly.
             labels = get_wikidata_labels(ids_list, language=self.lang)
             self.label_cache.update(labels)
             print(f"✅ Cached {len(self.label_cache)} labels.")
@@ -172,7 +160,7 @@ class AnalysisPipeline:
         return ", ".join(formatted)
 
     def run(self, output_path: str):
-        print(f"🚀 Starting Analysis...")
+        print(f"🚀 Starting ZERO-SHOT Analysis...")
 
         # 1. Load Data
         self.df = pd.read_csv(self.gen_path)
@@ -205,53 +193,36 @@ class AnalysisPipeline:
 
         self.fetch_all_labels(all_unique_ids)
 
-        # 3. Calculate BOTH Retrieval Recall AND Generation Precision & F1
-        def calc_id_metrics(row):
-            # 1. What was retrieved? (RAG Recall)
-            retrieved_candidates_str = str(row.get('candidates', ''))
-            retrieved_ids = SPARQLUtils.extract_ids_from_text(retrieved_candidates_str)
-
-            # 2. What was used? (LLM Precision & Recall)
+        # 3. Calculate ZERO-SHOT ID Metrics (No RAG involved)
+        def calc_id_metrics_zeroshot(row):
+            # What did the LLM guess from memory?
             gen_query = str(row.get('generated_query', row.get('sparql', '')))
-            used_ids = SPARQLUtils.extract_ids_from_text(gen_query)
+            guessed_ids = SPARQLUtils.extract_ids_from_text(gen_query)
 
             gold_query = str(row.get('gold_query', ''))
             gold_ids = SPARQLUtils.extract_ids_from_text(gold_query)
 
             # Formatted lists for the UI
-            retrieved_list = self.format_ids(retrieved_ids)
-            used_list = self.format_ids(used_ids)
+            guessed_list = self.format_ids(guessed_ids)
             gold_list = self.format_ids(gold_ids)
 
-            # Math
-            if not gold_ids: return retrieved_list, used_list, gold_list, 0.0, 0.0, 0.0
+            if not gold_ids: return guessed_list, gold_list, 0.0, 0.0
 
-            # RAG Recall: Did we fetch the gold IDs from ElasticSearch/Qdrant?
-            retrieval_matches = len(retrieved_ids.intersection(gold_ids))
-            retrieval_recall = retrieval_matches / len(gold_ids)
+            # LLM Precision: Of the IDs the LLM guessed, how many were correct?
+            guessed_matches = len(guessed_ids.intersection(gold_ids))
+            llm_precision = guessed_matches / len(guessed_ids) if guessed_ids else 0.0
 
-            # LLM Precision: Of the IDs the LLM used, how many were correct?
-            used_matches = len(used_ids.intersection(gold_ids))
-            llm_precision = used_matches / len(used_ids) if used_ids else 0.0
+            # LLM Recall: Did the LLM guess ALL the required IDs from memory?
+            llm_recall = guessed_matches / len(gold_ids) if gold_ids else 0.0
 
-            # LLM Recall: Did the LLM actually use all the necessary gold IDs?
-            llm_recall = used_matches / len(gold_ids)
+            return guessed_list, gold_list, llm_precision, llm_recall
 
-            # Entity Linking F1: The Harmonic mean of Precision and Recall for the final generated query
-            if (llm_precision + llm_recall) > 0:
-                entity_linking_f1 = 2 * (llm_precision * llm_recall) / (llm_precision + llm_recall)
-            else:
-                entity_linking_f1 = 0.0
-
-            return retrieved_list, used_list, gold_list, retrieval_recall, llm_precision, entity_linking_f1
-
-        # Add the new columns to the dataframe
-        self.df[['retrieved_candidates', 'used_candidate_ids', 'gold_wikidata_ids',
-                 'retrieval_recall_score', 'llm_precision_score', 'entity_linking_f1']] = self.df.apply(
-            lambda r: pd.Series(calc_id_metrics(r)), axis=1
+        self.df[
+            ['guessed_candidate_ids', 'gold_wikidata_ids', 'llm_precision_score', 'llm_recall_score']] = self.df.apply(
+            lambda r: pd.Series(calc_id_metrics_zeroshot(r)), axis=1
         )
 
-        # 4. Calculate Keyword Metrics
+        # 4. Calculate Keyword Metrics (Syntax Accuracy)
         def calc_kw_metrics(row):
             gen_query = str(row.get('generated_query', row.get('sparql', '')))
             gold_query = str(row.get('gold_query', ''))
@@ -267,7 +238,7 @@ class AnalysisPipeline:
             lambda r: pd.Series(calc_kw_metrics(r)), axis=1
         )
 
-        # 5. Calculate Result Metrics
+        # 5. Calculate Result Metrics (Final Score)
         def calc_res(row):
             gen = SPARQLUtils.normalize_result_string(row.get('result'))
             gold = SPARQLUtils.normalize_result_string(row.get('gold_result'))
@@ -278,36 +249,28 @@ class AnalysisPipeline:
             lambda r: pd.Series(calc_res(r)), axis=1
         )
 
-        self.df['query_similarity'] = self.df.apply(
-            lambda row: SPARQLUtils.text_similarity(
-                str(row.get('generated_query', row.get('sparql', ''))),
-                str(row.get('gold_query', ''))
-            ), axis=1
-        )
-
         self._print_detailed_analysis()
 
         if 'original_question_clean' in self.df.columns:
             del self.df['original_question_clean']
 
-        # 6. Save Final Columns (ADDED entity_linking_f1)
+        # 6. Save Final Columns (Notice we removed 'candidate_ids' etc.)
         final_cols = [
             'original_question',
             'generated_query', 'gold_query',
-            'retrieved_candidates', 'used_candidate_ids', 'gold_wikidata_ids',
-            'retrieval_recall_score', 'llm_precision_score', 'entity_linking_f1',
+            'guessed_candidate_ids', 'gold_wikidata_ids', 'llm_precision_score', 'llm_recall_score',
             'generated_keywords', 'gold_keywords', 'keyword_match_ratio',
             'result', 'gold_result', 'res_f1'
         ]
 
-        # Keep extra columns but exclude intermediate metrics unless needed
+        # Keep extra columns
         existing_extra = [c for c in self.df.columns if c not in final_cols and c not in [
             'question_id', 'res_precision', 'res_recall', 'query_similarity'
         ]]
 
         self.df = self.df[final_cols + existing_extra]
         self.df.to_csv(output_path, index=False)
-        print(f"\n💾 Analysis saved to: {output_path}")
+        print(f"\n💾 Zero-Shot Analysis saved to: {output_path}")
 
     def _print_detailed_analysis(self):
         """Prints the analysis table."""
@@ -319,52 +282,40 @@ class AnalysisPipeline:
         queries_with_results = valid_df['result'].apply(has_results).sum()
         queries_without_results = len(valid_df) - queries_with_results
 
-        # ADDED Avg Entity Linking F1
         stats = {
             "Total questions": len(valid_df),
             "Unique questions": valid_df['original_question'].nunique(),
 
-            "Avg RAG Retrieval Recall": valid_df['retrieval_recall_score'].mean(),
-            "Avg LLM Entity Precision": valid_df['llm_precision_score'].mean(),
-            "Avg Entity Linking F1": valid_df['entity_linking_f1'].mean(),
-
-            "Avg Keyword Match Ratio": valid_df['keyword_match_ratio'].mean(),
-
-            "Avg SPARQL Text Similarity": valid_df['query_similarity'].mean(),
+            "Zero-Shot LLM ID Precision": valid_df['llm_precision_score'].mean(),
+            "Zero-Shot LLM ID Recall": valid_df['llm_recall_score'].mean(),
+            "Avg Keyword Match Ratio (Syntax)": valid_df['keyword_match_ratio'].mean(),
 
             "Queries with results": queries_with_results,
             "Queries without results": queries_without_results,
             "Success rate (queries returning results)": queries_with_results / len(valid_df) if len(
                 valid_df) > 0 else 0,
 
-            "Avg Result Precision": valid_df['res_precision'].mean(),
-            "Avg Result Recall": valid_df['res_recall'].mean(),
-            "Avg Result F1": valid_df['res_f1'].mean(),
+            "Avg Result F1 (Final Score)": valid_df['res_f1'].mean(),
         }
 
         stats_df = pd.DataFrame(stats.items(), columns=["Metric", "Value"])
 
         print("\n" + "=" * 50)
-        print("=== Text-to-SPARQL System Analysis ===")
+        print("=== Zero-Shot Text-to-SPARQL Analysis ===")
         print("=" * 50)
         print(stats_df.to_string(index=False, formatters={"Value": "{:.3f}".format}))
         print("=" * 50 + "\n")
 
 
 if __name__ == "__main__":
-    # 1. Point this to your RAW or old GPT CSV
-    GENERATED_CSV = "../../results/benchmark/with_neighbors/raw/sparql_outputs_en.csv"
-
-    # 2. Point this to the QALD JSON
+    # CHANGE THESE PATHS TO POINT TO YOUR ZERO-SHOT CSV
+    GENERATED_CSV = "../../results/benchmark/en_opus_4.7_zero.csv"
     QALD_JSON = "../../qald_10_with_mk.json"
-
-    # 3. Choose where to save the newly analyzed file
-    OUTPUT_CSV = "../../results/benchmark/with_neighbors/processed/en_gpt-4.1-analyzed.csv"
-
+    OUTPUT_CSV = "../../results/benchmark/en_opus_4.7_zero_analyzed.csv"
     LANGUAGE = "en"
 
     if Path(GENERATED_CSV).exists() and Path(QALD_JSON).exists():
-        pipeline = AnalysisPipeline(GENERATED_CSV, QALD_JSON, LANGUAGE)
+        pipeline = ZeroShotAnalysisPipeline(GENERATED_CSV, QALD_JSON, LANGUAGE)
         pipeline.run(OUTPUT_CSV)
     else:
-        print("❌ Error: Input files not found. Check paths.")
+        print(f"❌ Error: Input files not found. Check paths.\nCSV: {GENERATED_CSV}\nJSON: {QALD_JSON}")

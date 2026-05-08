@@ -92,3 +92,24 @@ Return a **JSON object** with two keys:
 1. "reasoning": A brief sentence explaining which entities and properties you chose.
 2. "sparql": The valid SPARQL query string.
 """
+
+zero_shot_sparql_prompt_template = """You are an expert Wikidata SPARQL developer. Your goal is to construct a syntactically correct and semantically accurate SPARQL query to answer the user's question.
+
+### 1. Analysis Strategy
+- **Entities**: Rely on your internal pre-trained knowledge of Wikidata to identify the correct item QIDs and property PIDs.
+- **Logic**: Determine if the user wants a list, a count, a specific date, or a boolean (ASK) answer.
+
+### 2. Constraints & Rules
+- **Prefixes**: Assume standard prefixes (`wd:`, `wdt:`, `p:`, `ps:`, `pq:`) are already defined. Do not output `PREFIX` lines.
+- **URIs vs Labels**: Return the raw entity URIs (e.g., `?entity`). Do NOT use `SERVICE wikibase:label` to get text labels unless the question explicitly asks for a string name.
+- **Filtering**: Use `FILTER` for dates or string matching if necessary.
+- **Limit**: Use `LIMIT 10` unless the user asks for "all" or a specific count.
+
+### 3. User Task
+**User Question:** "{question}"
+
+### 4. Final Output
+Return a **JSON object** with two keys:
+1. "reasoning": A brief sentence explaining which entities and properties you chose and why.
+2. "sparql": The valid SPARQL query string.
+"""

@@ -1,42 +1,47 @@
-import asyncio
-import logging
 import uuid
 
 from datasets import load_from_disk
+from loguru import logger
 from tqdm import tqdm
 
-from src.databases.qdrant.qdrant import qdrant_db
-from src.llm.embed_labels import embed_value
+from databases.qdrant.embed_labels import embed_value
+from src.config.settings import settings
+from src.databases.qdrant.qdrant import QdrantDatabase
 
 
 async def embed_few_shot_examples():
-    logging.basicConfig(level=logging.INFO)
-    logging.info("Starting the embedding process...")
+    logger.info("Starting the few-shot embedding process...")
 
     dataset = load_from_disk("../../../lcquad_collections/lcquad2_ru")
-    logging.info(f"Dataset loaded with {len(dataset)} records.")
+    logger.info(f"Dataset loaded with {len(dataset)} records.")
 
-    for row in tqdm(dataset, desc="Embedding and upserting records"):
-        question = row.get("question_ru")
-        sparql_query = row.get("sparql_wikidata")
+    # Instantiate Qdrant locally
+    qdrant_db = QdrantDatabase(host=settings.qdrant_host, port=settings.qdrant_port)
 
-        if not question or not sparql_query:
-            logging.error("Skipping record with missing question or SPARQL query.")
-            continue
+    try:
+        for row in tqdm(dataset, desc="Embedding and upserting records"):
+            question = row.get("question_ru")
+            sparql_query = row.get("sparql_wikidata")
 
-        try:
-            vector = embed_value(question)
-            await qdrant_db.upsert_record(
-                vector=vector,
-                collection_name="lcquad2_0_ru",
-                unique_id=str(uuid.uuid4()),
-                payload={"answer": sparql_query, "value": question}
-            )
-        except Exception as e:
-            logging.error(f"Error processing record with question: {question}. Error: {e}")
+            if not question or not sparql_query:
+                logger.warning("Skipping record with missing question or SPARQL query.")
+                continue
 
-    logging.info("Embedding process completed successfully.")
+            try:
+                vector = embed_value(question)
+                await qdrant_db.upsert_record(
+                    unique_id=str(uuid.uuid4()),  # Few-shots don't have QIDs, random UUID is fine
+                    collection_name="lcquad2_0_ru",
+                    payload={"answer": sparql_query, "value": question},
+                    vector=vector
+                )
+            except Exception as e:
+                logger.error(f"Error processing record with question: '{question}'. Error: {e}")
 
+        logger.success("Few-shot embedding process completed successfully.")
 
-if __name__ == "__main__":
-    asyncio.run(embed_few_shot_examples())
+    finally:
+        await qdrant_db.close()
+
+# if __name__ == "__main__":
+#     asyncio.run(embed_few_shot_examples())

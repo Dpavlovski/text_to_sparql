@@ -25,6 +25,3 @@ def extract_qald_query_ids() -> Optional[List[str]]:
             extracted_items.update(re.findall(r"(?:wd:|wdt:)([QP]\d+)", sparql_query))
 
     return extracted_items if extracted_items else None
-
-
-print(extract_qald_query_ids())

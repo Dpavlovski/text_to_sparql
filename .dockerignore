@@ -30,8 +30,6 @@ src/wikidata/dump_processing/data_processed/
 # Environment
 .env
 
-# Documentation
-README.md
 
 results/benchmark/embedding_models
 results/benchmark/models

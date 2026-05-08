@@ -3,10 +3,12 @@ from typing import List
 
 from langchain_core.prompts import PromptTemplate
 from langchain_core.tools import tool
+from loguru import logger
 from pydantic import Field, BaseModel
 
 from src.agent.prompts import validation_prompt
-from src.llm.llm_provider import llm_provider
+from src.config.settings import settings
+from src.llm.llm_provider import LLMProvider
 from src.tools.ner import Keyword
 from src.tools.sparql import get_sparql_query
 
@@ -34,10 +36,9 @@ async def generate_sparql(
     raw_results = response.get('results')
 
     if raw_results is not None:
-
         # ASK questions
         if isinstance(raw_results, bool):
-            results_for_log = raw_results
+            results_for_log = str(raw_results).lower()
 
         # SELECT questions with results
         elif isinstance(raw_results, list) and raw_results:
@@ -53,20 +54,18 @@ async def generate_sparql(
                         if val:
                             extracted_values.append(val)
 
-            # remove duplicates, preserve order
+            # Remove duplicates, preserve order
             seen = set()
             extracted_values = [
                 x for x in extracted_values
                 if not (x in seen or seen.add(x))
             ]
 
-            # 🔹 FINAL TOOL FORMATTING
             results_for_log = " ".join(str(v) for v in extracted_values)
 
         # SELECT questions with NO results
         elif isinstance(raw_results, list) and not raw_results:
             results_for_log = None
-
         else:
             results_for_log = None
 
@@ -88,7 +87,7 @@ async def generate_sparql(
         "ner": ner_log_str,
         "candidates": str(candidates),
         "examples": str(examples),
-        "generated_query": str(response.get("sparql")),
+        "generated_query": str(response.get("sparql", "")),
         "result": results_for_log,
         "time": f"{execution_time:.2f}"
     }
@@ -100,7 +99,8 @@ async def generate_sparql(
 
 class ValidationResult(BaseModel):
     is_valid: bool = Field(
-        description="Set to True if the SPARQL results correctly answer the user's question, otherwise False.")
+        description="Set to True if the SPARQL results correctly answer the user's question, otherwise False."
+    )
 
 
 @tool("validate_results")
@@ -112,8 +112,13 @@ async def validate_results(question: str, results: str) -> bool:
         question=question,
         results=results
     )
-    llm = llm_provider.get_model(model_identifier="kwaipilot/kat-coder-pro:free").with_structured_output(
-        ValidationResult
-    )
-    response = await llm.ainvoke(prompt)
-    return response.is_valid
+
+    # Professional touch: Use settings!
+    llm = LLMProvider.get_model(model_identifier=settings.default_llm_model).with_structured_output(ValidationResult)
+
+    try:
+        response = await llm.ainvoke(prompt)
+        return response.is_valid
+    except Exception as e:
+        logger.error(f"Validation tool failed: {e}")
+        return False
